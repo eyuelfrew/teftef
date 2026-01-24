@@ -1,8 +1,33 @@
-import React from 'react';
-import { X, ShoppingBag, Tag, Calendar, User, DollarSign, Package, AlertCircle, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, ShoppingBag, Tag, Calendar, User, DollarSign, Package, AlertCircle, Trash2, Loader2, Phone } from 'lucide-react';
+import api from '../../services/api';
 import { cn } from '../../utils/cn';
 
 const ProductDetailModal = ({ isOpen, onClose, product, onDelete }) => {
+    const [poster, setPoster] = useState(null);
+    const [loadingPoster, setLoadingPoster] = useState(false);
+
+    useEffect(() => {
+        const fetchPoster = async () => {
+            if (isOpen && product?.id) {
+                setLoadingPoster(true);
+                try {
+                    const res = await api.get(`/products/${product.id}/poster`);
+                    setPoster(res.data.data.user);
+                } catch (err) {
+                    console.error("Failed to fetch poster", err);
+                    setPoster(null);
+                } finally {
+                    setLoadingPoster(false);
+                }
+            } else {
+                setPoster(null);
+            }
+        };
+
+        fetchPoster();
+    }, [isOpen, product?.id]);
+
     if (!isOpen || !product) return null;
 
     return (
@@ -114,30 +139,54 @@ const ProductDetailModal = ({ isOpen, onClose, product, onDelete }) => {
                                     </div>
                                 )}
 
-                                {product.user && (
+                                {loadingPoster ? (
+                                    <div className="flex items-center justify-center py-6 bg-neutral-50 rounded-3xl border border-dashed border-neutral-200">
+                                        <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
+                                        <span className="ml-2 text-sm text-neutral-400">Loading poster details...</span>
+                                    </div>
+                                ) : poster ? (
                                     <div className="space-y-4">
                                         <h3 className="font-bold text-lg text-[#0a0a0a] flex items-center gap-2">
                                             <User size={20} className="text-neutral-400" />
                                             Poster Information
                                         </h3>
-                                        <div className="p-6 bg-neutral-900 rounded-3xl text-white flex items-center justify-between shadow-xl">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-xl overflow-hidden">
-                                                    {product.user.profile_pic ? (
-                                                        <img src={product.user.profile_pic} alt="" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        product.user.first_name?.[0] || 'U'
-                                                    )}
+                                        <div className="p-6 bg-neutral-900 rounded-3xl text-white shadow-xl">
+                                            <div className="flex items-center justify-between mb-6">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-2xl overflow-hidden border border-white/10">
+                                                        {poster.profile_pic ? (
+                                                            <img src={poster.profile_pic} alt="" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            poster.first_name?.[0] || 'U'
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-lg">{poster.first_name} {poster.last_name}</p>
+                                                        <p className="text-sm text-white/50">{poster.email}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="font-bold">{product.user.first_name} {product.user.last_name}</p>
-                                                    <p className="text-xs text-white/50">{product.user.email}</p>
+                                                <div className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">
+                                                    Verified Seller
                                                 </div>
                                             </div>
-                                            <div className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widest">
-                                                Verified Seller
-                                            </div>
+
+                                            {poster.phone_number && (
+                                                <div className="flex items-center gap-3 px-4 py-3 bg-white/5 rounded-2xl border border-white/5 group hover:bg-white/10 transition-colors">
+                                                    <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400">
+                                                        <Phone size={14} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] text-white/30 uppercase font-black tracking-widest">Phone Number</p>
+                                                        <p className="text-sm font-bold">{poster.phone_number}</p>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
+                                    </div>
+                                ) : (
+                                    <div className="p-6 bg-neutral-50 rounded-3xl border border-neutral-100 flex items-center gap-3 text-neutral-400 italic text-sm">
+                                        <AlertCircle size={18} />
+                                        Poster information not available for this product.
                                     </div>
                                 )}
                             </div>

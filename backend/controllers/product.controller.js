@@ -17,26 +17,6 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
         offset: offset,
     });
 
-    // Manually fetch user details since no associations are defined
-    const userIds = [...new Set(products.map(p => p.userId).filter(Boolean))];
-    let usersMap = {};
-    if (userIds.length > 0) {
-        const users = await Users.findAll({
-            where: { id: userIds },
-            attributes: ['id', 'first_name', 'last_name', 'email', 'profile_pic']
-        });
-        usersMap = users.reduce((acc, user) => {
-            acc[user.id] = user;
-            return acc;
-        }, {});
-    }
-
-    const productsWithUsers = products.map(product => {
-        const productData = product.toJSON();
-        productData.user = usersMap[product.userId] || null;
-        return productData;
-    });
-
     const totalPages = Math.ceil(count / limit);
 
     res.status(200).json({
@@ -48,7 +28,32 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
             currentPage: page,
             limit,
         },
-        data: { products: productsWithUsers },
+        data: { products },
+    });
+});
+
+exports.getProductPoster = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const product = await Product.findByPk(id, { attributes: ['userId'] });
+
+    if (!product) {
+        return next(new AppError("Product not found", 404));
+    }
+
+    if (!product.userId) {
+        return res.status(200).json({
+            status: "success",
+            data: { user: null }
+        });
+    }
+
+    const user = await Users.findByPk(product.userId, {
+        attributes: ['id', 'first_name', 'last_name', 'email', 'profile_pic', 'phone_number']
+    });
+
+    res.status(200).json({
+        status: "success",
+        data: { user },
     });
 });
 

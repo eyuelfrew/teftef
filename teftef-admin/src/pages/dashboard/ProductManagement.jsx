@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import ProductDetailModal from '../../components/ui/ProductDetailModal';
-import UserDetailModal from '../../components/ui/UserDetailModal';
 
 const SortableHeader = ({ children, sortKey, sortConfig, onSort }) => {
     const isSorted = sortConfig.key === sortKey;
@@ -41,8 +40,6 @@ const ProductManagement = () => {
     const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, limit: 10 });
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
-    const [selectedUser, setSelectedUser] = useState(null);
-    const [isUserModalOpen, setUserModalOpen] = useState(false);
 
     const fetchProducts = async (page = 1) => {
         setLoading(true);
@@ -90,14 +87,6 @@ const ProductManagement = () => {
         setDetailModalOpen(true);
     };
 
-    const handleViewUser = (e, user) => {
-        e.stopPropagation();
-        if (user) {
-            setSelectedUser(user);
-            setUserModalOpen(true);
-        }
-    };
-
     const filteredAndSortedProducts = useMemo(() => {
         let sortedProducts = [...products];
 
@@ -143,7 +132,7 @@ const ProductManagement = () => {
                         <ShoppingBag className="w-8 h-8" />
                         Product Management
                     </h1>
-                    <p className="text-neutral-500 mt-1">Manage platform products, view details, and posters.</p>
+                    <p className="text-neutral-500 mt-1">Manage platform products and overview listings.</p>
                 </div>
                 <div className="relative w-full sm:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
@@ -165,7 +154,6 @@ const ProductManagement = () => {
                                 <SortableHeader sortKey="name" sortConfig={sortConfig} onSort={handleSort}>Product</SortableHeader>
                                 <th className="px-6 py-4 text-xs uppercase tracking-widest font-bold text-neutral-400">Category</th>
                                 <SortableHeader sortKey="price" sortConfig={sortConfig} onSort={handleSort}>Price</SortableHeader>
-                                <th className="px-6 py-4 text-xs uppercase tracking-widest font-bold text-neutral-400">Poster</th>
                                 <th className="px-6 py-4 text-xs uppercase tracking-widest font-bold text-neutral-400">Status</th>
                                 <SortableHeader sortKey="createdAt" sortConfig={sortConfig} onSort={handleSort}>Date</SortableHeader>
                                 <th className="px-6 py-4 text-xs uppercase tracking-widest font-bold text-neutral-400 text-right">Actions</th>
@@ -197,25 +185,6 @@ const ProductManagement = () => {
                                     </td>
                                     <td className="px-6 py-4 font-bold text-[#0a0a0a]">
                                         ETB {parseFloat(product.price).toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        {product.user ? (
-                                            <button
-                                                onClick={(e) => handleViewUser(e, product.user)}
-                                                className="flex items-center gap-2 hover:bg-neutral-100 px-2 py-1 rounded-lg transition-all group"
-                                            >
-                                                <div className="w-7 h-7 rounded-full bg-neutral-200 flex items-center justify-center text-xs overflow-hidden">
-                                                    {product.user.profile_pic ? (
-                                                        <img src={product.user.profile_pic} alt="" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <User size={14} />
-                                                    )}
-                                                </div>
-                                                <span className="text-sm font-medium text-neutral-700 group-hover:text-[#0a0a0a]">{product.user.first_name}</span>
-                                            </button>
-                                        ) : (
-                                            <span className="text-sm text-neutral-400">Unknown</span>
-                                        )}
                                     </td>
                                     <td className="px-6 py-4">
                                         {product.status === 'active' && (<span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100 uppercase tracking-wider">Active</span>)}
@@ -280,12 +249,6 @@ const ProductManagement = () => {
                 onClose={() => setDetailModalOpen(false)}
                 product={selectedProduct}
                 onDelete={() => handleDeleteProduct(selectedProduct?.id)}
-            />
-
-            <UserDetailModal
-                isOpen={isUserModalOpen}
-                onClose={() => setUserModalOpen(false)}
-                user={selectedUser}
             />
         </div>
     );

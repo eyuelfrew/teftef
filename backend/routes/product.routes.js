@@ -20,4 +20,6 @@ router.route("/:id")
     .patch(requireUser, uploadProductImages, productController.updateProduct)
     .delete(requireUser, productController.deleteProduct);
 
+router.get("/:id/poster", optionalAuth, productController.getProductPoster);
+
 module.exports = router;
