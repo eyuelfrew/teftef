@@ -1,0 +1,111 @@
+const jwt = require("jsonwebtoken");
+const { verifyAccessToken } = require("../utils/jwt");
+const { Users } = require("../models");
+const AppError = require("../utils/AppError");
+
+/**
+ * User Authentication Middleware
+ * 
+ * Verifies access tokens for protected routes.
+ * Supports both cookies and Bearer tokens.
+ */
+
+/**
+ * Require authenticated user
+ * Verifies access token from cookie or Authorization header
+ */
+const requireUser = async (req, res, next) => {
+    try {
+        // Get token from cookie or Authorization header
+        let token = req.cookies?.user_token;
+
+        if (!token && req.headers.authorization) {
+            const authHeader = req.headers.authorization;
+            if (authHeader.startsWith("Bearer ")) {
+                token = authHeader.substring(7);
+            }
+        }
+
+        if (!token) {
+            return next(new AppError("Authentication required", 401));
+        }
+
+        // Verify access token
+        let decoded;
+        try {
+            decoded = verifyAccessToken(token);
+        } catch (error) {
+            return next(new AppError(error.message, 401));
+        }
+
+        // Get user from database (to check if blocked)
+        const user = await Users.findByPk(decoded.id);
+
+        if (!user) {
+            return next(new AppError("User not found", 404));
+        }
+
+        // Check if user is blocked or disabled
+        if (user.is_blocked) {
+            return next(new AppError("Your account has been blocked", 403));
+        }
+
+        if (user.status === "disabled") {
+            return next(new AppError("Your account has been disabled", 403));
+        }
+
+        // Attach user to request
+        req.user = {
+            id: user.id,
+            email: user.email,
+            firebase_uid: decoded.firebase_uid,
+        };
+
+        next();
+    } catch (error) {
+        return next(new AppError("Authentication failed", 401));
+    }
+};
+
+/**
+ * Optional authentication
+ * Attaches user to request if token is valid, but doesn't require it
+ */
+const optionalAuth = async (req, res, next) => {
+    try {
+        let token = req.cookies?.user_token;
+
+        if (!token && req.headers.authorization) {
+            const authHeader = req.headers.authorization;
+            if (authHeader.startsWith("Bearer ")) {
+                token = authHeader.substring(7);
+            }
+        }
+
+        if (token) {
+            try {
+                const decoded = verifyAccessToken(token);
+                const user = await Users.findByPk(decoded.id);
+
+                if (user && !user.is_blocked && user.status === "active") {
+                    req.user = {
+                        id: user.id,
+                        email: user.email,
+                        firebase_uid: decoded.firebase_uid,
+                    };
+                }
+            } catch (error) {
+                // Token invalid, but that's okay for optional auth
+            }
+        }
+
+        next();
+    } catch (error) {
+        next();
+    }
+};
+
+module.exports = {
+    requireUser,
+    optionalAuth,
+};
