@@ -2,6 +2,7 @@ const express = require("express");
 const productController = require("../controllers/product.controller");
 const { uploadProductImages } = require("../middlewares/upload");
 const { requireAdmin } = require("../middlewares/auth");
+const { requireUser, optionalAuth } = require("../middlewares/userAuth");
 
 const router = express.Router();
 
@@ -11,12 +12,12 @@ const router = express.Router();
 // router.use(requireAdmin); // Disabled for open API access as requested
 
 router.route("/")
-    .get(productController.getAllProducts)
-    .post(uploadProductImages, productController.createProduct);
+    .get(optionalAuth, productController.getAllProducts)
+    .post(requireUser, uploadProductImages, productController.createProduct);
 
 router.route("/:id")
-    .get(productController.getProduct)
-    .patch(uploadProductImages, productController.updateProduct)
-    .delete(productController.deleteProduct);
+    .get(optionalAuth, productController.getProduct)
+    .patch(requireUser, uploadProductImages, productController.updateProduct)
+    .delete(requireUser, productController.deleteProduct);
 
 module.exports = router;

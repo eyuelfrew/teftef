@@ -1,4 +1,4 @@
-const { Product } = require("../models");
+const { Product, Users } = require("../models");
 const asyncHandler = require("../middlewares/asyncHandler");
 const AppError = require("../utils/AppError");
 const fs = require("fs");
@@ -7,16 +7,48 @@ const path = require("path");
 const uploadsRoot = path.join(__dirname, "..", "public", "uploads"); // Adjust if uploads root is different
 
 exports.getAllProducts = asyncHandler(async (req, res, next) => {
-    // Basic implementation for now
-    const products = await Product.findAll({
-        order: [["createdAt", "DESC"]],
-        limit: 100,
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const offset = (page - 1) * limit;
+
+    const { count, rows: products } = await Product.findAndCountAll({
+        order: [["createdAt", "ASC"]],
+        limit: limit,
+        offset: offset,
     });
+
+    // Manually fetch user details since no associations are defined
+    const userIds = [...new Set(products.map(p => p.userId).filter(Boolean))];
+    let usersMap = {};
+    if (userIds.length > 0) {
+        const users = await Users.findAll({
+            where: { id: userIds },
+            attributes: ['id', 'first_name', 'last_name', 'email', 'profile_pic']
+        });
+        usersMap = users.reduce((acc, user) => {
+            acc[user.id] = user;
+            return acc;
+        }, {});
+    }
+
+    const productsWithUsers = products.map(product => {
+        const productData = product.toJSON();
+        productData.user = usersMap[product.userId] || null;
+        return productData;
+    });
+
+    const totalPages = Math.ceil(count / limit);
 
     res.status(200).json({
         status: "success",
         results: products.length,
-        data: { products },
+        pagination: {
+            totalResults: count,
+            totalPages,
+            currentPage: page,
+            limit,
+        },
+        data: { products: productsWithUsers },
     });
 });
 
@@ -34,7 +66,7 @@ exports.getProduct = asyncHandler(async (req, res, next) => {
 });
 
 exports.createProduct = asyncHandler(async (req, res, next) => {
-    const { name, description, price, discount, stock, status, category, brand, metadata } = req.body;
+    const { name, description, price, discount, stock, status, category, brand, metadata, userId } = req.body;
 
     let parsedMetadata = {};
     if (metadata) {
@@ -60,6 +92,7 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
         brand,
         metadata: parsedMetadata,
         images: [], // Will update after moving files
+        userId: userId || req.user?.id, // Use userId from body or authenticated user
     });
 
     if (req.files && req.files.length > 0) {

@@ -61,6 +61,11 @@ module.exports = (sequelize) => {
                 defaultValue: {},
                 comment: "Dynamic attributes for the product based on category",
             },
+            userId: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                comment: "The user who posted the product",
+            },
         },
         {
             tableName: "products",

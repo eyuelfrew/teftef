@@ -67,9 +67,7 @@ const ensureSuperAdmin = async () => {
             status: "active",
         });
 
-        console.log("✅ Super admin created successfully.");
-        console.log("   Email: admin@example.com");
-        console.log("   Password: admin");
+
     } catch (error) {
         console.error("❌ Super admin creation failed:", error.message);
     }

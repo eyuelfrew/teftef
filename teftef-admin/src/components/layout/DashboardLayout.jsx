@@ -112,6 +112,7 @@ const DashboardLayout = ({ children }) => {
                     {user?.is_super_admin && (
                         <>
                             <SidebarLink to="/admins" icon={Shield} label="Admin Management" collapsed={collapsed} />
+                            <SidebarLink to="/products" icon={Package} label="Product Listing" collapsed={collapsed} />
                             <SidebarLink to="/users" icon={Users} label="User Management" collapsed={collapsed} onClick={handleUserManagementClick} />
                             <SidebarLink to="/moderation" icon={ShieldCheck} label="Product Moderation" collapsed={collapsed} />
                         </>

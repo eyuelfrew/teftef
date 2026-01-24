@@ -10,6 +10,7 @@ import AttributeManager from './pages/dashboard/AttributeManager';
 import CategoryManager from './pages/dashboard/CategoryManager';
 import FormPreview from './pages/dashboard/FormPreview';
 import UserManagement from './pages/dashboard/UserManagement';
+import ProductManagement from './pages/dashboard/ProductManagement';
 import ProductModeration from './pages/dashboard/ProductModeration';
 
 // Protected Route Component
@@ -64,11 +65,9 @@ function App() {
                     <Route path="/attributes" element={<AttributeManager />} />
                     <Route path="/sponsorships" element={<SponsorshipManagement />} />
                     <Route path="/admins" element={<AdminManagement />} />
-import ProductModeration from './pages/dashboard/ProductModeration';
-...
+                    <Route path="/products" element={<ProductManagement />} />
                     <Route path="/users" element={<UserManagement />} />
                     <Route path="/moderation" element={<ProductModeration />} />
-...
                   </Routes>
                 </DashboardLayout>
               </ProtectedRoute>
