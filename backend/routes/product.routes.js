@@ -11,6 +11,8 @@ const router = express.Router();
 
 // router.use(requireAdmin); // Disabled for open API access as requested
 
+router.get("/my-products", requireUser, productController.getMyProducts);
+
 router.route("/")
     .get(optionalAuth, productController.getAllProducts)
     .post(requireUser, uploadProductImages, productController.createProduct);

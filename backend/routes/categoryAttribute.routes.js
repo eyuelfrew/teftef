@@ -6,6 +6,7 @@ const router = express.Router();
 
 // Public route to fetch attributes
 router.get("/:categoryId", attributeController.getAttributesByCategory);
+router.get("/category/:categoryId", attributeController.getAttributesByCategory);
 
 // Protected routes
 router.use(requireAdmin);

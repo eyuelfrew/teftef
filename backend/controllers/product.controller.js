@@ -32,6 +32,33 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
     });
 });
 
+exports.getMyProducts = asyncHandler(async (req, res, next) => {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const offset = (page - 1) * limit;
+
+    const { count, rows: products } = await Product.findAndCountAll({
+        where: { userId: req.user.id },
+        order: [["createdAt", "DESC"]],
+        limit: limit,
+        offset: offset,
+    });
+
+    const totalPages = Math.ceil(count / limit);
+
+    res.status(200).json({
+        status: "success",
+        results: products.length,
+        pagination: {
+            totalResults: count,
+            totalPages,
+            currentPage: page,
+            limit,
+        },
+        data: { products },
+    });
+});
+
 exports.getProductPoster = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
     const product = await Product.findByPk(id, { attributes: ['userId'] });
@@ -134,6 +161,11 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
         return next(new AppError("Product not found", 404));
     }
 
+    // Check ownership
+    if (product.userId !== req.user.id) {
+        return next(new AppError("You do not have permission to perform this action", 403));
+    }
+
     const { name, description, price, discount, stock, status, category, brand, metadata, keepImages } = req.body;
 
     if (name) product.name = name;
@@ -195,6 +227,11 @@ exports.deleteProduct = asyncHandler(async (req, res, next) => {
 
     if (!product) {
         return next(new AppError("Product not found", 404));
+    }
+
+    // Check ownership
+    if (product.userId !== req.user.id) {
+        return next(new AppError("You do not have permission to perform this action", 403));
     }
 
     // Cleanup images

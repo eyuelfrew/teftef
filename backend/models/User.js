@@ -52,6 +52,19 @@ module.exports = (sequelize) => {
                 type: DataTypes.ENUM("active", "disabled"),
                 defaultValue: "active",
             },
+            is_phone_verified: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            otp_code: {
+                type: DataTypes.STRING(10),
+                allowNull: true,
+            },
+            otp_expires_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
             profile_pic: {
                 type: DataTypes.TEXT,
                 allowNull: true,
