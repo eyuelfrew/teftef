@@ -39,7 +39,14 @@ exports.syncUser = asyncHandler(async (req, res, next) => {
             if (!user.first_name) user.first_name = names[0];
             if (!user.last_name && names.length > 1) user.last_name = names.slice(1).join(" ");
         }
-        if (phone_number && !user.phone_number) user.phone_number = phone_number;
+        if (phone_number && user.phone_number !== phone_number) {
+            // Check if another user already has this phone number
+            const userWithPhone = await User.findOne({ where: { phone_number } });
+            if (userWithPhone && userWithPhone.id !== user.id) {
+                return next(new AppError("This phone number is already linked to another account", 400));
+            }
+            user.phone_number = phone_number;
+        }
 
         await user.save();
     } else {
@@ -93,7 +100,15 @@ exports.requestOtp = asyncHandler(async (req, res, next) => {
 
     user.otp_code = otp;
     user.otp_expires_at = expiry;
-    if (req.body.phone_number) user.phone_number = req.body.phone_number;
+
+    if (req.body.phone_number && user.phone_number !== req.body.phone_number) {
+        // Check if phone is already in use
+        const existingUserWithPhone = await User.findOne({ where: { phone_number: req.body.phone_number } });
+        if (existingUserWithPhone && existingUserWithPhone.id !== user.id) {
+            return next(new AppError("This phone number is already in use by another account", 400));
+        }
+        user.phone_number = req.body.phone_number;
+    }
 
     await user.save();
 

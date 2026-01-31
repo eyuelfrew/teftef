@@ -1,4 +1,4 @@
-const { RootedCategory } = require("../models");
+const { Category: RootedCategory } = require("../models");
 const asyncHandler = require("../middlewares/asyncHandler");
 const AppError = require("../utils/AppError");
 const fs = require("fs");

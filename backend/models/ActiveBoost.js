@@ -1,19 +1,37 @@
 const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
-    const Product = sequelize.define(
-        "Product",
+    const ActiveBoost = sequelize.define(
+        "ActiveBoost",
         {
             id: {
                 type: DataTypes.INTEGER.UNSIGNED,
                 autoIncrement: true,
                 primaryKey: true,
             },
+            productId: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: false,
+                unique: true, // Only one active boost per original product
+            },
+            packageId: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: false,
+            },
+            startsAt: {
+                type: DataTypes.DATE,
+                allowNull: false,
+                defaultValue: DataTypes.NOW,
+            },
+            expiresAt: {
+                type: DataTypes.DATE,
+                allowNull: false,
+            },
+            // Copy of Product attributes
             name: {
                 type: DataTypes.STRING(200),
                 allowNull: false,
             },
-
             description: {
                 type: DataTypes.TEXT,
                 allowNull: true,
@@ -21,27 +39,11 @@ module.exports = (sequelize) => {
             price: {
                 type: DataTypes.DECIMAL(10, 2),
                 allowNull: false,
-                validate: {
-                    min: 0,
-                },
             },
             discount: {
                 type: DataTypes.DECIMAL(10, 2),
                 allowNull: false,
                 defaultValue: 0,
-                validate: {
-                    min: 0,
-                },
-            },
-            stock: {
-                type: DataTypes.INTEGER.UNSIGNED,
-                allowNull: false,
-                defaultValue: 0,
-            },
-            status: {
-                type: DataTypes.ENUM("draft", "active", "archived"),
-                allowNull: false,
-                defaultValue: "draft",
             },
             category: {
                 type: DataTypes.STRING(255),
@@ -59,37 +61,34 @@ module.exports = (sequelize) => {
                 type: DataTypes.JSON,
                 allowNull: true,
                 defaultValue: {},
-                comment: "Dynamic attributes for the product based on category",
             },
             userId: {
                 type: DataTypes.INTEGER.UNSIGNED,
                 allowNull: true,
-                comment: "The user who posted the product",
             },
-            isBoosted: {
-                type: DataTypes.BOOLEAN,
-                defaultValue: false,
-                comment: "Whether the product is currently boosted",
-            },
-            boostExpiresAt: {
-                type: DataTypes.DATE,
+            // Copy of Owner attributes (for Admin Dashboard)
+            userFirstName: {
+                type: DataTypes.STRING(100),
                 allowNull: true,
-                comment: "When the current boost expires",
             },
-            boostPackageId: {
-                type: DataTypes.INTEGER.UNSIGNED,
+            userLastName: {
+                type: DataTypes.STRING(100),
                 allowNull: true,
-                comment: "The boost package used (if any)",
             },
         },
         {
-            tableName: "products",
+            tableName: "active_boosts",
             timestamps: true,
-            paranoid: true, // soft delete support
+            indexes: [
+                {
+                    fields: ["expiresAt"],
+                },
+                {
+                    fields: ["productId"],
+                },
+            ],
         }
     );
 
-    return Product;
+    return ActiveBoost;
 };
-
-

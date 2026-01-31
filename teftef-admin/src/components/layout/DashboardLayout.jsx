@@ -17,7 +17,10 @@ import {
     Smartphone,
     Tag,
     Shield,
-    ShieldCheck
+    ShieldCheck,
+    Zap,
+    Landmark,
+    TrendingUp
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../utils/cn';
@@ -53,6 +56,7 @@ const SidebarLink = ({ to, icon: Icon, label, collapsed, onClick }) => {
 const DashboardLayout = ({ children }) => {
     const [collapsed, setCollapsed] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
+    const [boostMenuOpen, setBoostMenuOpen] = useState(false);
     const [isWarningModalOpen, setWarningModalOpen] = useState(false);
     const { user, logout } = useAuth();
     const navigate = useNavigate();
@@ -140,6 +144,72 @@ const DashboardLayout = ({ children }) => {
                     </div>
 
                     <div className="flex items-center gap-6">
+                        {/* Boost Services Dropdown */}
+                        {user?.is_super_admin && (
+                            <div
+                                className="relative"
+                                onMouseEnter={() => setBoostMenuOpen(true)}
+                                onMouseLeave={() => setBoostMenuOpen(false)}
+                            >
+                                <button className={cn(
+                                    "flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-semibold text-sm",
+                                    boostMenuOpen ? "bg-[#0a0a0a] text-white shadow-lg" : "text-neutral-500 hover:bg-neutral-50 hover:text-[#0a0a0a]"
+                                )}>
+                                    <Zap size={18} className={boostMenuOpen ? "animate-pulse" : ""} />
+                                    <span>Boost Services</span>
+                                    <ChevronRight size={14} className={cn("transition-transform duration-300", boostMenuOpen ? "rotate-90" : "")} />
+                                </button>
+
+                                {boostMenuOpen && (
+                                    <div className="absolute left-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <div className="w-64 bg-white/95 backdrop-blur-xl border border-neutral-100 rounded-3xl shadow-[0_20px_50px_-20px_rgba(0,0,0,0.15)] py-3 overflow-hidden">
+                                            <div className="px-4 py-2 border-b border-neutral-50 mb-2">
+                                                <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-black">Monetization</p>
+                                            </div>
+                                            <div className="px-2 space-y-1">
+                                                <button onClick={() => navigate('/boosts')} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-neutral-50 transition-all text-left text-sm group">
+                                                    <div className="p-2 bg-amber-50 text-amber-600 rounded-xl group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                                                        <Zap size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-[#0a0a0a]">Packages</p>
+                                                        <p className="text-[10px] text-neutral-400 font-medium">Manage pricing & plans</p>
+                                                    </div>
+                                                </button>
+                                                <button onClick={() => navigate('/boost-requests')} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-neutral-50 transition-all text-left text-sm group">
+                                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                        <ShieldCheck size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-[#0a0a0a]">Requests</p>
+                                                        <p className="text-[10px] text-neutral-400 font-medium">Verify pending payments</p>
+                                                    </div>
+                                                </button>
+                                                <button onClick={() => navigate('/active-boosts')} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-neutral-50 transition-all text-left text-sm group">
+                                                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                                        <TrendingUp size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-[#0a0a0a]">Active Boosts</p>
+                                                        <p className="text-[10px] text-neutral-400 font-medium">Live promoted products</p>
+                                                    </div>
+                                                </button>
+                                                <button onClick={() => navigate('/payment-agents')} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-neutral-50 transition-all text-left text-sm group">
+                                                    <div className="p-2 bg-neutral-100 text-neutral-600 rounded-xl group-hover:bg-[#0a0a0a] group-hover:text-white transition-colors">
+                                                        <Landmark size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-[#0a0a0a]">Payment Agents</p>
+                                                        <p className="text-[10px] text-neutral-400 font-medium">Configure bank accounts</p>
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <button className="relative p-2 text-neutral-400 hover:text-[#0a0a0a] hover:bg-neutral-50 rounded-xl transition-all">
                             <Bell size={20} />
                             <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>

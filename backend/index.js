@@ -6,7 +6,8 @@ const path = require("path");
 require("dotenv").config();
 
 const { createDatabase } = require("./config/DB_CONFIG");
-const { initDb, ensureSuperAdmin } = require("./models");
+const { initDb, ensureSuperAdmin, Product, ActiveBoost } = require("./models");
+const { Op } = require("sequelize");
 const { apiLimiter } = require("./middlewares/rateLimiter");
 const { notFound, errorHandler } = require("./middlewares/errorHandler");
 const adminAuthRoutes = require("./routes/adminAuth.routes");
@@ -16,6 +17,7 @@ const adRoutes = require("./routes/ad.routes");
 const categoryRoutes = require("./routes/category.routes");
 const productRoutes = require("./routes/product.routes");
 const sponsorshipRoutes = require("./routes/sponsorship.routes");
+const boostRoutes = require("./routes/boost.routes");
 const attributeRoutes = require("./routes/categoryAttribute.routes");
 
 process.on("unhandledRejection", (reason, promise) => {
@@ -110,10 +112,45 @@ app.use("/api/ads", adRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sponsorships", sponsorshipRoutes);
+app.use("/api/admin/boost-packages", boostRoutes);
 app.use("/api/attributes", attributeRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
+
+/* ======================================================
+   BOOST CLEANUP TASK
+====================================================== */
+const runBoostCleanup = async () => {
+  try {
+    const now = new Date();
+    const [updatedCount] = await Product.update(
+      { isBoosted: false, boostExpiresAt: null },
+      {
+        where: {
+          isBoosted: true,
+          boostExpiresAt: { [Op.lt]: now }
+        }
+      }
+    );
+
+    // Also remove from standalone ActiveBoost table
+    const deletedCount = await ActiveBoost.destroy({
+      where: {
+        expiresAt: { [Op.lt]: now }
+      }
+    });
+
+    if (updatedCount > 0 || deletedCount > 0) {
+      console.log(`🧹 Cleaned up ${updatedCount} product flags and ${deletedCount} active boosts.`);
+    }
+  } catch (error) {
+    console.error("❌ Boost cleanup failed:", error);
+  }
+};
+
+// Check every hour
+setInterval(runBoostCleanup, 60 * 60 * 1000);
 
 /* ======================================================
    START SERVER
@@ -125,6 +162,9 @@ const startServer = async () => {
     await initDb();
     await ensureSuperAdmin();
     console.log("✅ Database ready.");
+
+    // Run initial cleanup on startup
+    await runBoostCleanup();
 
     const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);

@@ -1,249 +1,328 @@
-const { Product, Users } = require("../models");
+const { Product, Category, Users, BoostPackage, BoostRequest, PaymentAgent, ActiveBoost } = require("../models");
+const { Op } = require("sequelize");
 const asyncHandler = require("../middlewares/asyncHandler");
 const AppError = require("../utils/AppError");
-const fs = require("fs");
-const path = require("path");
-
-const uploadsRoot = path.join(__dirname, "..", "public", "uploads"); // Adjust if uploads root is different
 
 exports.getAllProducts = asyncHandler(async (req, res, next) => {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-    const offset = (page - 1) * limit;
+    const { search, category, minPrice, maxPrice, sort, page = 1, limit = 10 } = req.query;
 
-    const { count, rows: products } = await Product.findAndCountAll({
-        order: [["createdAt", "ASC"]],
-        limit: limit,
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
+
+    const queryOptions = {
+        where: {},
+        include: [
+            { model: Users, as: "user", attributes: ["id", "first_name", "last_name", "email", "profile_pic", "phone_number"] }
+        ],
+        order: [
+            ["isBoosted", "DESC"],
+            ["createdAt", "DESC"]
+        ],
+        limit: limitNum,
         offset: offset,
-    });
+    };
 
-    const totalPages = Math.ceil(count / limit);
+    if (search) {
+        queryOptions.where.name = { [Op.like]: `%${search}%` };
+    }
+
+    if (category) {
+        queryOptions.where.category = category;
+    }
+
+    if (minPrice || maxPrice) {
+        queryOptions.where.price = {};
+        if (minPrice) queryOptions.where.price[Op.gte] = minPrice;
+        if (maxPrice) queryOptions.where.price[Op.lte] = maxPrice;
+    }
+
+    const { count, rows } = await Product.findAndCountAll(queryOptions);
 
     res.status(200).json({
         status: "success",
-        results: products.length,
+        results: rows.length,
         pagination: {
+            currentPage: pageNum,
+            totalPages: Math.ceil(count / limitNum),
             totalResults: count,
-            totalPages,
-            currentPage: page,
-            limit,
+            limit: limitNum
         },
-        data: { products },
+        data: { products: rows }
     });
 });
 
 exports.getMyProducts = asyncHandler(async (req, res, next) => {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-    const offset = (page - 1) * limit;
-
-    const { count, rows: products } = await Product.findAndCountAll({
+    const products = await Product.findAll({
         where: { userId: req.user.id },
-        order: [["createdAt", "DESC"]],
-        limit: limit,
-        offset: offset,
+        include: [
+            {
+                model: BoostRequest,
+                as: "boostRequests",
+                limit: 1,
+                order: [["createdAt", "DESC"]],
+                separate: true
+            }
+        ],
+        order: [["createdAt", "DESC"]]
     });
-
-    const totalPages = Math.ceil(count / limit);
 
     res.status(200).json({
         status: "success",
         results: products.length,
-        pagination: {
-            totalResults: count,
-            totalPages,
-            currentPage: page,
-            limit,
-        },
-        data: { products },
+        data: { products }
     });
 });
 
-exports.getProductPoster = asyncHandler(async (req, res, next) => {
-    const { id } = req.params;
-    const product = await Product.findByPk(id, { attributes: ['userId'] });
+exports.getProduct = asyncHandler(async (req, res, next) => {
+    const product = await Product.findByPk(req.params.id, {
+        include: [
+            { model: Users, as: "user", attributes: ["id", "first_name", "last_name", "email", "profile_pic", "phone_number"] },
+            {
+                model: BoostRequest,
+                as: "boostRequests",
+                // Only show boost request status to the owner
+                where: req.user ? { userId: req.user.id } : { id: 0 },
+                required: false,
+                limit: 1,
+                order: [["createdAt", "DESC"]],
+                separate: true
+            }
+        ]
+    });
 
     if (!product) {
         return next(new AppError("Product not found", 404));
     }
 
-    if (!product.userId) {
-        return res.status(200).json({
-            status: "success",
-            data: { user: null }
-        });
-    }
-
-    const user = await Users.findByPk(product.userId, {
-        attributes: ['id', 'first_name', 'last_name', 'email', 'profile_pic', 'phone_number']
-    });
-
     res.status(200).json({
         status: "success",
-        data: { user },
+        data: { product }
     });
 });
 
-exports.getProduct = asyncHandler(async (req, res, next) => {
+exports.createProduct = asyncHandler(async (req, res, next) => {
+    const { name, description, price, category, brand, metadata } = req.body;
+
+    // Handle images from middleware
+    const images = req.files ? req.files.map(file => `/uploads/products/${file.filename}`) : [];
+
+    const product = await Product.create({
+        name,
+        description,
+        price,
+        category,
+        brand,
+        metadata: typeof metadata === 'string' ? JSON.parse(metadata) : metadata,
+        images,
+        userId: req.user.id,
+        status: "active"
+    });
+
+    res.status(201).json({
+        status: "success",
+        data: { product }
+    });
+});
+
+exports.updateProduct = asyncHandler(async (req, res, next) => {
     const product = await Product.findByPk(req.params.id);
 
     if (!product) {
         return next(new AppError("Product not found", 404));
     }
 
-    res.status(200).json({
-        status: "success",
-        data: { product },
-    });
-});
-
-exports.createProduct = asyncHandler(async (req, res, next) => {
-    const { name, description, price, discount, stock, status, category, brand, metadata, userId } = req.body;
-
-    let parsedMetadata = {};
-    if (metadata) {
-        try {
-            parsedMetadata = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
-        } catch (e) {
-            return next(new AppError("Invalid metadata format", 400));
-        }
+    // Check ownership or admin
+    if (product.userId !== req.user?.id && !req.admin) {
+        return next(new AppError("Unauthorized", 403));
     }
 
-    // processed images
-    let imageUrls = [];
-
-    // Create product first
-    const product = await Product.create({
-        name,
-        description,
-        price,
-        discount,
-        stock,
-        status: status || "draft",
-        category,
-        brand,
-        metadata: parsedMetadata,
-        images: [], // Will update after moving files
-        userId: userId || req.user?.id, // Use userId from body or authenticated user
-    });
+    const { name, description, price, category, brand, metadata, status } = req.body;
 
     if (req.files && req.files.length > 0) {
-        const targetDir = path.join(uploadsRoot, "products", String(product.id));
-        if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
-        }
-
-        req.files.forEach((file) => {
-            const oldPath = file.path;
-            const newFilename = path.basename(file.path);
-            const newPath = path.join(targetDir, newFilename);
-
-            fs.renameSync(oldPath, newPath);
-            imageUrls.push(`/uploads/products/${product.id}/${newFilename}`);
-        });
-
-        // Update product with images
-        product.images = imageUrls;
-        await product.save();
+        product.images = req.files.map(file => `/uploads/products/${file.filename}`);
     }
-
-    res.status(201).json({
-        status: "success",
-        data: { product },
-    });
-});
-
-exports.updateProduct = asyncHandler(async (req, res, next) => {
-    const { id } = req.params;
-    const product = await Product.findByPk(id);
-
-    if (!product) {
-        return next(new AppError("Product not found", 404));
-    }
-
-    // Check ownership (Bypass for admins)
-    if (product.userId !== req.user?.id && !req.admin) {
-        return next(new AppError("You do not have permission to perform this action", 403));
-    }
-
-    const { name, description, price, discount, stock, status, category, brand, metadata, keepImages } = req.body;
 
     if (name) product.name = name;
     if (description) product.description = description;
     if (price) product.price = price;
-    if (discount !== undefined) product.discount = discount;
-    if (stock !== undefined) product.stock = stock;
-    if (status) product.status = status;
     if (category) product.category = category;
     if (brand) product.brand = brand;
+    if (metadata) product.metadata = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+    if (status) product.status = status;
 
-    if (metadata) {
-        try {
-            product.metadata = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
-        } catch (e) {
-            // Ignore or error? Let's ignore invalid update attempt
-        }
-    }
-
-    // Handle images
-    // For simplicity: If new files uploaded, append or replace?
-    // Let's adopt a strategy: if 'keepImages' is sent (as JSON array of URLs), we keep those.
-    // Plus new files are added.
-
-    let currentImages = product.images || [];
-    if (keepImages) {
-        try {
-            const kept = typeof keepImages === "string" ? JSON.parse(keepImages) : keepImages;
-            // Filter currentImages to only include kept ones (basic cleanup)
-            currentImages = kept;
-        } catch (e) { }
-    }
-
-    if (req.files && req.files.length > 0) {
-        // Files are already in the correct folder because we used ID in route?
-        // Wait, update route HAS ID. So upload middleware put them in /products/:id directly!
-        // We just need to add paths.
-
-        req.files.forEach((file) => {
-            // The middleware 'upload.js' constructs filename. 
-            // We need to construct the URL.
-            const filename = path.basename(file.path);
-            currentImages.push(`/uploads/products/${id}/${filename}`);
-        });
-    }
-
-    product.images = currentImages;
     await product.save();
 
     res.status(200).json({
         status: "success",
-        data: { product },
+        data: { product }
     });
 });
 
 exports.deleteProduct = asyncHandler(async (req, res, next) => {
-    const { id } = req.params;
-    const product = await Product.findByPk(id);
+    const product = await Product.findByPk(req.params.id);
 
     if (!product) {
         return next(new AppError("Product not found", 404));
     }
 
-    // Check ownership (Bypass for admins)
     if (product.userId !== req.user?.id && !req.admin) {
-        return next(new AppError("You do not have permission to perform this action", 403));
-    }
-
-    // Cleanup images
-    const targetDir = path.join(uploadsRoot, "products", String(id));
-    if (fs.existsSync(targetDir)) {
-        fs.rmSync(targetDir, { recursive: true, force: true });
+        return next(new AppError("Unauthorized", 403));
     }
 
     await product.destroy();
 
     res.status(204).json({
         status: "success",
-        data: null,
+        data: null
+    });
+});
+
+exports.getBoostPackages = asyncHandler(async (req, res, next) => {
+    const packages = await BoostPackage.findAll({
+        where: { isEnabled: true },
+        order: [["durationHours", "ASC"]]
+    });
+
+    res.status(200).json({
+        status: "success",
+        data: { packages }
+    });
+});
+
+exports.getPaymentAgents = asyncHandler(async (req, res, next) => {
+    const agents = await PaymentAgent.findAll({
+        where: { isEnabled: true },
+        order: [["name", "ASC"]]
+    });
+
+    res.status(200).json({
+        status: "success",
+        data: { agents }
+    });
+});
+
+exports.getMyBoostHistory = asyncHandler(async (req, res, next) => {
+    const requests = await BoostRequest.findAll({
+        where: { userId: req.user.id },
+        include: [
+            { model: Product, as: "product", attributes: ["id", "name", "price", "images"] },
+            { model: BoostPackage, as: "package" }
+        ],
+        order: [["createdAt", "DESC"]]
+    });
+
+    res.status(200).json({
+        status: "success",
+        results: requests.length,
+        data: { requests }
+    });
+});
+
+exports.activateBoost = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { packageId, transactionId, agentId } = req.body;
+
+    if (!transactionId) return next(new AppError("Transaction ID is required", 400));
+    if (!agentId) return next(new AppError("Please select a payment agent", 400));
+
+    const product = await Product.findByPk(id);
+    if (!product) return next(new AppError("Product not found", 404));
+
+    if (product.userId !== req.user?.id && !req.admin) {
+        return next(new AppError("Unauthorized", 403));
+    }
+
+    const boostPackage = await BoostPackage.findByPk(packageId);
+    if (!boostPackage || !boostPackage.isEnabled) return next(new AppError("Invalid package", 400));
+
+    const agent = await PaymentAgent.findByPk(agentId);
+    if (!agent || !agent.isEnabled) return next(new AppError("Invalid agent", 400));
+
+    // Check for existing pending request for THIS product
+    const pendingRequest = await BoostRequest.findOne({
+        where: {
+            productId: product.id,
+            status: "pending"
+        }
+    });
+
+    if (pendingRequest) {
+        return next(new AppError("You already have a pending boost request for this product. Please wait for approval.", 400));
+    }
+
+    const existingRequest = await BoostRequest.findOne({ where: { transactionId } });
+    if (existingRequest) return next(new AppError("Transaction ID already submitted", 400));
+
+    const boostRequest = await BoostRequest.create({
+        productId: product.id,
+        packageId: boostPackage.id,
+        userId: req.user.id,
+        transactionId,
+        agentId: agent.id,
+        bankName: agent.bankName,
+        status: "pending"
+    });
+
+    res.status(201).json({
+        status: "success",
+        message: "Boost request submitted successfully.",
+        data: { boostRequest }
+    });
+});
+
+exports.getBoostedProducts = asyncHandler(async (req, res, next) => {
+    const now = new Date();
+
+    // 1. "Just-In-Time" Cleanup: Find expired boosts
+    const expiredBoosts = await ActiveBoost.findAll({
+        where: { expiresAt: { [Op.lte]: now } },
+        attributes: ["productId"]
+    });
+
+    if (expiredBoosts.length > 0) {
+        const expiredProductIds = expiredBoosts.map(b => b.productId);
+
+        // Remove from standalone table
+        await ActiveBoost.destroy({
+            where: { productId: expiredProductIds }
+        });
+
+        // Update original product flags to keep them in sync
+        await Product.update(
+            { isBoosted: false, boostExpiresAt: null, boostPackageId: null },
+            { where: { id: expiredProductIds } }
+        );
+
+        console.log(`🧹 Lazy cleanup: Removed ${expiredBoosts.length} expired boosts.`);
+    }
+
+    // 2. Fetch only live promotions (Started and not yet Expired)
+    const products = await ActiveBoost.findAll({
+        where: {
+            startsAt: { [Op.lte]: now },
+            // expiresAt check is implicit because we just deleted everything <= now
+        },
+        order: [["createdAt", "DESC"]]
+    });
+
+    res.status(200).json({
+        status: "success",
+        results: products.length,
+        data: {
+            products,
+            serverTime: now
+        }
+    });
+});
+
+exports.getProductPoster = asyncHandler(async (req, res, next) => {
+    // Basic implementation for now
+    const product = await Product.findByPk(req.params.id);
+    if (!product) return next(new AppError("Product not found", 404));
+
+    res.status(200).json({
+        status: "success",
+        data: { posterUrl: `https://yourdomain.com/poster/${product.id}` }
     });
 });

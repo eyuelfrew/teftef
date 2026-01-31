@@ -13,7 +13,8 @@ import {
     LayoutGrid,
     ExternalLink,
     Calendar,
-    Tag
+    Tag,
+    Zap
 } from 'lucide-react';
 import api from '../../services/api';
 import ProductDetailModal from '../../components/ui/ProductDetailModal';
@@ -46,7 +47,9 @@ const ProductManagement = () => {
         try {
             const res = await api.get(`/products?page=${page}&limit=${pagination.limit}`);
             setProducts(res.data.data.products);
-            setPagination(res.data.pagination);
+            if (res.data.pagination) {
+                setPagination(res.data.pagination);
+            }
         } catch (err) {
             console.error("Failed to fetch products", err);
         } finally {
@@ -172,7 +175,10 @@ const ProductManagement = () => {
                                                 )}
                                             </div>
                                             <div className="max-w-[200px]">
-                                                <p className="font-semibold text-[#0a0a0a] truncate">{product.name}</p>
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className="font-semibold text-[#0a0a0a] truncate">{product.name}</p>
+                                                    {product.isBoosted && <Zap size={12} className="text-yellow-500 fill-yellow-500 shrink-0" />}
+                                                </div>
                                                 <p className="text-xs text-neutral-400 truncate">ID: {product.id}</p>
                                             </div>
                                         </div>
@@ -187,9 +193,18 @@ const ProductManagement = () => {
                                         ETB {parseFloat(product.price).toLocaleString()}
                                     </td>
                                     <td className="px-6 py-4">
-                                        {product.status === 'active' && (<span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100 uppercase tracking-wider">Active</span>)}
-                                        {product.status === 'draft' && (<span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-50 text-yellow-700 text-[10px] font-bold border border-yellow-100 uppercase tracking-wider">Draft</span>)}
-                                        {product.status === 'archived' && (<span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-neutral-50 text-neutral-700 text-[10px] font-bold border border-neutral-100 uppercase tracking-wider">Archived</span>)}
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                {product.status === 'active' && (<span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold border border-green-100 uppercase tracking-wider">Active</span>)}
+                                                {product.status === 'draft' && (<span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-50 text-yellow-700 text-[10px] font-bold border border-yellow-100 uppercase tracking-wider">Draft</span>)}
+                                                {product.status === 'archived' && (<span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-neutral-50 text-neutral-700 text-[10px] font-bold border border-neutral-100 uppercase tracking-wider">Archived</span>)}
+                                            </div>
+                                            {product.isBoosted && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-yellow-400 text-black text-[9px] font-black border border-yellow-500 uppercase tracking-tighter w-fit">
+                                                    <Zap size={10} className="fill-black" /> Boosted
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 text-sm text-neutral-500">
                                         {new Date(product.createdAt).toLocaleDateString()}

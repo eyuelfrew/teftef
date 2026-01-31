@@ -1,31 +1,58 @@
 const { sequelize } = require("../config/DB_CONFIG");
-const defineUser = require("./User");
-const defineAdmin = require("./Admin");
-const defineCategory = require("./Category");
-const defineNormalCategory = require("./NormalCategory");
-const defineProduct = require("./Product");
-const defineRefreshToken = require("./RefreshToken");
-const defineBrand = require("./Brand");
-const defineHomeCarousel = require("./HomeCarousel");
-const defineAdvertisement = require("./Advertisement");
-const defineSponsorship = require("./Sponsorship");
-const defineCategoryAttribute = require("./CategoryAttribute");
 const bcrypt = require("bcryptjs");
 
-// Define models
-const Users = defineUser(sequelize);
-const Admin = defineAdmin(sequelize);
-const RootedCategory = defineCategory(sequelize);
-const NormalCategory = defineNormalCategory(sequelize);
+const defineCategory = require("./Category");
+const defineProduct = require("./Product");
+const defineAd = require("./Advertisement");
+const defineSponsorship = require("./Sponsorship");
+const defineAdmin = require("./Admin");
+const defineUser = require("./User");
+const defineCategoryAttribute = require("./CategoryAttribute");
+const defineBoostPackage = require("./BoostPackage");
+const defineBoostRequest = require("./BoostRequest");
+const definePaymentAgent = require("./PaymentAgent");
+const defineBrand = require("./Brand");
+const defineHomeCarousel = require("./HomeCarousel");
+const defineNormalCategory = require("./NormalCategory");
+const defineRefreshToken = require("./RefreshToken");
+const defineActiveBoost = require("./ActiveBoost");
+const defineBoostHistory = require("./BoostHistory");
+
+// Initialize models
+const Category = defineCategory(sequelize);
 const Product = defineProduct(sequelize);
-const RefreshToken = defineRefreshToken(sequelize);
+const Advertisement = defineAd(sequelize);
+const Sponsorship = defineSponsorship(sequelize);
+const Admin = defineAdmin(sequelize);
+const Users = defineUser(sequelize);
+const CategoryAttribute = defineCategoryAttribute(sequelize);
+const BoostPackage = defineBoostPackage(sequelize);
+const BoostRequest = defineBoostRequest(sequelize);
+const PaymentAgent = definePaymentAgent(sequelize);
 const Brand = defineBrand(sequelize);
 const HomeCarousel = defineHomeCarousel(sequelize);
-const Advertisement = defineAdvertisement(sequelize);
-const Sponsorship = defineSponsorship(sequelize);
-const CategoryAttribute = defineCategoryAttribute(sequelize);
+const NormalCategory = defineNormalCategory(sequelize);
+const RefreshToken = defineRefreshToken(sequelize);
+const ActiveBoost = defineActiveBoost(sequelize);
+const BoostHistory = defineBoostHistory(sequelize);
 
-// No associations - using manual queries instead
+// Associations
+Product.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });
+Users.hasMany(Product, { foreignKey: "userId", as: "products", constraints: false });
+
+BoostRequest.belongsTo(Product, { foreignKey: "productId", as: "product", constraints: false });
+BoostRequest.belongsTo(BoostPackage, { foreignKey: "packageId", as: "package", constraints: false });
+BoostRequest.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });
+BoostRequest.belongsTo(PaymentAgent, { foreignKey: "agentId", as: "agent", constraints: false });
+
+BoostHistory.belongsTo(Product, { foreignKey: "productId", as: "product", constraints: false });
+BoostHistory.belongsTo(BoostPackage, { foreignKey: "packageId", as: "package", constraints: false });
+BoostHistory.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });
+BoostHistory.belongsTo(PaymentAgent, { foreignKey: "agentId", as: "agent", constraints: false });
+
+Product.hasMany(BoostRequest, { foreignKey: "productId", as: "boostRequests", constraints: false });
+
+// Initialize database and sync models
 
 // Initialize database and sync models
 const initDb = async () => {
@@ -33,43 +60,34 @@ const initDb = async () => {
         await sequelize.authenticate();
         console.log("✅ Database connection established.");
 
-        const alterSync = process.env.DB_SYNC_ALTER === "true" || true; // Default to true as per user preference
-
-        await sequelize.sync({ alter: alterSync });
-
-        console.log(`✅ All Tables synchronized successfully.`);
+        if (process.env.DB_SYNC_ALTER === "true" || true) {
+            await sequelize.sync({ alter: true });
+            console.log("✅ Models synchronized with database.");
+        }
     } catch (error) {
         console.error("❌ Database initialization failed:", error.message);
         throw error;
     }
 };
 
-// Create default super admin if not exists
 const ensureSuperAdmin = async () => {
     try {
-        const existingSuperAdmin = await Admin.findOne({
-            where: { is_super_admin: true },
-        });
-
-        if (existingSuperAdmin) {
-            console.log("✅ Super admin already exists.");
-            return;
+        const superAdmin = await Admin.findOne({ where: { is_super_admin: true } });
+        if (!superAdmin) {
+            console.log("ℹ️ No Super Admin found. Creating default...");
+            const hashedPassword = await bcrypt.hash("admin123", 12);
+            await Admin.create({
+                first_name: "Super",
+                last_name: "Admin",
+                email: "admin@teftef.com",
+                password: hashedPassword,
+                is_super_admin: true,
+                status: "active"
+            });
+            console.log("✅ Default Super Admin created (admin@teftef.com / admin123).");
         }
-
-        const hashedPassword = await bcrypt.hash("admin", 10);
-
-        await Admin.create({
-            first_name: "Super",
-            last_name: "Admin",
-            email: "admin@example.com",
-            password: hashedPassword,
-            is_super_admin: true,
-            status: "active",
-        });
-
-
     } catch (error) {
-        console.error("❌ Super admin creation failed:", error.message);
+        console.error("❌ Failed to ensure Super Admin:", error.message);
     }
 };
 
@@ -77,17 +95,20 @@ module.exports = {
     sequelize,
     initDb,
     ensureSuperAdmin,
-    Users,
-    Admin,
-    RootedCategory,
-    NormalCategory,
+    Category,
     Product,
-    RefreshToken,
-    Brand,
-    HomeCarousel,
     Advertisement,
     Sponsorship,
+    Admin,
+    Users,
     CategoryAttribute,
+    BoostPackage,
+    BoostRequest,
+    PaymentAgent,
+    Brand,
+    HomeCarousel,
+    NormalCategory,
+    RefreshToken,
+    ActiveBoost,
+    BoostHistory,
 };
-
-

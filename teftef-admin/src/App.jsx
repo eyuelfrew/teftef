@@ -12,6 +12,10 @@ import FormPreview from './pages/dashboard/FormPreview';
 import UserManagement from './pages/dashboard/UserManagement';
 import ProductManagement from './pages/dashboard/ProductManagement';
 import ProductModeration from './pages/dashboard/ProductModeration';
+import BoostPackageManagement from './pages/dashboard/BoostPackageManagement';
+import BoostRequestManagement from './pages/dashboard/BoostRequestManagement';
+import PaymentAgentManagement from './pages/dashboard/PaymentAgentManagement';
+import ActiveBoostManagement from './pages/dashboard/ActiveBoostManagement';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -68,6 +72,10 @@ function App() {
                     <Route path="/products" element={<ProductManagement />} />
                     <Route path="/users" element={<UserManagement />} />
                     <Route path="/moderation" element={<ProductModeration />} />
+                    <Route path="/boosts" element={<BoostPackageManagement />} />
+                    <Route path="/boost-requests" element={<BoostRequestManagement />} />
+                    <Route path="/payment-agents" element={<PaymentAgentManagement />} />
+                    <Route path="/active-boosts" element={<ActiveBoostManagement />} />
                   </Routes>
                 </DashboardLayout>
               </ProtectedRoute>
