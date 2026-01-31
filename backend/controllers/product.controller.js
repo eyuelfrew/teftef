@@ -161,8 +161,8 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
         return next(new AppError("Product not found", 404));
     }
 
-    // Check ownership
-    if (product.userId !== req.user.id) {
+    // Check ownership (Bypass for admins)
+    if (product.userId !== req.user?.id && !req.admin) {
         return next(new AppError("You do not have permission to perform this action", 403));
     }
 
@@ -229,8 +229,8 @@ exports.deleteProduct = asyncHandler(async (req, res, next) => {
         return next(new AppError("Product not found", 404));
     }
 
-    // Check ownership
-    if (product.userId !== req.user.id) {
+    // Check ownership (Bypass for admins)
+    if (product.userId !== req.user?.id && !req.admin) {
         return next(new AppError("You do not have permission to perform this action", 403));
     }
 

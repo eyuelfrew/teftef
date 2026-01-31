@@ -3,6 +3,7 @@ const productController = require("../controllers/product.controller");
 const { uploadProductImages } = require("../middlewares/upload");
 const { requireAdmin } = require("../middlewares/auth");
 const { requireUser, optionalAuth } = require("../middlewares/userAuth");
+const { requireUserOrAdmin } = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
@@ -19,8 +20,8 @@ router.route("/")
 
 router.route("/:id")
     .get(optionalAuth, productController.getProduct)
-    .patch(requireUser, uploadProductImages, productController.updateProduct)
-    .delete(requireUser, productController.deleteProduct);
+    .patch(requireUserOrAdmin, uploadProductImages, productController.updateProduct)
+    .delete(requireUserOrAdmin, productController.deleteProduct);
 
 router.get("/:id/poster", optionalAuth, productController.getProductPoster);
 
