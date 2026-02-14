@@ -1,7 +1,8 @@
-const { Product, Category, Users, BoostPackage, BoostRequest, PaymentAgent, ActiveBoost } = require("../models");
+const { Product, Category, Users, BoostPackage, BoostRequest, PaymentAgent, ActiveBoost, SearchLog, PopularSearch } = require("../models");
 const { Op } = require("sequelize");
 const asyncHandler = require("../middlewares/asyncHandler");
 const AppError = require("../utils/AppError");
+const { logSearch } = require("../controllers/search.controller");
 
 exports.getAllProducts = asyncHandler(async (req, res, next) => {
     const { search, category, minPrice, maxPrice, sort, page = 1, limit = 10 } = req.query;
@@ -39,6 +40,18 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
 
     const { count, rows } = await Product.findAndCountAll(queryOptions);
 
+    // Log the search if a search term was provided
+    if (search) {
+        await logSearch(
+            search, 
+            req.user?.id, 
+            req.ip, 
+            req.get('User-Agent'), 
+            rows.length,
+            req.get('Referer')
+        );
+    }
+
     res.status(200).json({
         status: "success",
         results: rows.length,
@@ -67,10 +80,24 @@ exports.getMyProducts = asyncHandler(async (req, res, next) => {
         order: [["createdAt", "DESC"]]
     });
 
+    const productsWithStatus = products.map(product => {
+        const plainProduct = product.get({ plain: true });
+        let boostStatus = 'none';
+
+        if (plainProduct.isBoosted) {
+            boostStatus = 'active';
+        } else {
+            const hasPending = (plainProduct.boostRequests || []).some(r => r.status === 'pending');
+            if (hasPending) boostStatus = 'pending';
+        }
+
+        return { ...plainProduct, boostStatus };
+    });
+    console.log(productsWithStatus);
     res.status(200).json({
         status: "success",
         results: products.length,
-        data: { products }
+        data: { products: productsWithStatus }
     });
 });
 
@@ -95,17 +122,43 @@ exports.getProduct = asyncHandler(async (req, res, next) => {
         return next(new AppError("Product not found", 404));
     }
 
+    const plainProduct = product.get({ plain: true });
+    let boostStatus = 'none';
+
+    // Only calculate status if user exists (owner check)
+    if (req.user && plainProduct.userId === req.user.id) {
+        if (plainProduct.isBoosted) {
+            boostStatus = 'active';
+        } else {
+            const hasPending = (plainProduct.boostRequests || []).some(r => r.status === 'pending');
+            if (hasPending) boostStatus = 'pending';
+        }
+    }
+
     res.status(200).json({
         status: "success",
-        data: { product }
+        data: { product: { ...plainProduct, boostStatus } }
     });
 });
 
 exports.createProduct = asyncHandler(async (req, res, next) => {
     const { name, description, price, category, brand, metadata } = req.body;
 
-    // Handle images from middleware
-    const images = req.files ? req.files.map(file => `/uploads/products/${file.filename}`) : [];
+    // Handle images from middleware - files are stored in temp directory for new products
+    let images = [];
+    if (req.files && req.files.length > 0) {
+        // Move files from temp directory to product-specific directory after getting product ID
+        // For now, we'll store the temporary paths and the moving will happen after product creation
+        images = req.files.map(file => {
+            // Check if file is in temp directory, if so, adjust path accordingly
+            if (file.path.includes('/temp/')) {
+                // For new products, files are temporarily in the temp directory
+                return `/uploads/products/temp/${file.filename}`;
+            } else {
+                return `/uploads/products/${file.filename}`;
+            }
+        });
+    }
 
     const product = await Product.create({
         name,
@@ -118,6 +171,35 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
         userId: req.user.id,
         status: "active"
     });
+
+    // After product creation, we should move temp files to product-specific directory
+    if (req.files && req.files.length > 0) {
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Create product-specific directory
+        const productDir = path.join(__dirname, '..', 'public', 'uploads', 'products', String(product.id));
+        if (!fs.existsSync(productDir)) {
+            fs.mkdirSync(productDir, { recursive: true });
+        }
+        
+        // Move files from temp to product directory
+        const newImages = [];
+        for (const file of req.files) {
+            const tempFilePath = file.path;
+            const fileName = path.basename(tempFilePath);
+            const newFilePath = path.join(productDir, fileName);
+            
+            // Move the file
+            fs.renameSync(tempFilePath, newFilePath);
+            
+            // Update the image path in the database
+            newImages.push(`/uploads/products/${product.id}/${fileName}`);
+        }
+        
+        // Update the product with the new image paths
+        await product.update({ images: newImages });
+    }
 
     res.status(201).json({
         status: "success",
@@ -140,7 +222,31 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
     const { name, description, price, category, brand, metadata, status } = req.body;
 
     if (req.files && req.files.length > 0) {
-        product.images = req.files.map(file => `/uploads/products/${file.filename}`);
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Create product-specific directory if it doesn't exist
+        const productDir = path.join(__dirname, '..', 'public', 'uploads', 'products', String(product.id));
+        if (!fs.existsSync(productDir)) {
+            fs.mkdirSync(productDir, { recursive: true });
+        }
+        
+        // Move files from temp to product directory (if they were uploaded to temp)
+        const newImages = [];
+        for (const file of req.files) {
+            const tempFilePath = file.path;
+            const fileName = path.basename(tempFilePath);
+            const newFilePath = path.join(productDir, fileName);
+            
+            // Move the file if it's not already in the correct location
+            if (tempFilePath !== newFilePath) {
+                fs.renameSync(tempFilePath, newFilePath);
+            }
+            
+            newImages.push(`/uploads/products/${product.id}/${fileName}`);
+        }
+        
+        product.images = newImages;
     }
 
     if (name) product.name = name;
@@ -288,7 +394,7 @@ exports.getBoostedProducts = asyncHandler(async (req, res, next) => {
             where: { productId: expiredProductIds }
         });
 
-        // Update original product flags to keep them in sync
+        // Update original product flags to keep them in sync for user-side visibility
         await Product.update(
             { isBoosted: false, boostExpiresAt: null, boostPackageId: null },
             { where: { id: expiredProductIds } }

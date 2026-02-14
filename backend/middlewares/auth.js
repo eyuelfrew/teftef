@@ -7,7 +7,7 @@ const getCookieOptions = () => {
     return {
         httpOnly: true,
         secure: isProd, // secure cookies in production (HTTPS)
-        sameSite: isProd ? "strict" : "lax",
+        sameSite: "none",
         // maxAge will be set when we set the cookie
     };
 };

@@ -16,8 +16,10 @@ const storage = multer.diskStorage({
         const id = req.params.id;
 
         if (!id) {
-            // If no ID, upload to temp folder
-            const tempDir = path.join(uploadsRoot, "temp");
+            // If no ID, upload to temp folder for new product creation
+            const isProductRoute = req.baseUrl.includes("/products");
+            const subFolder = isProductRoute ? "products" : "categories";
+            const tempDir = path.join(uploadsRoot, subFolder, "temp");
             ensureDir(tempDir);
             return cb(null, tempDir);
         }

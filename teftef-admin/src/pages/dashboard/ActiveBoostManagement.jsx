@@ -101,6 +101,7 @@ const ActiveBoostManagement = () => {
                             <tr className="border-b border-neutral-50 bg-neutral-50/50">
                                 <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Product</th>
                                 <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Owner</th>
+                                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Price</th>
                                 <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Schedule (Start - End)</th>
                                 <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Status</th>
                                 <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-neutral-400 text-right">Actions</th>
@@ -131,6 +132,11 @@ const ActiveBoostManagement = () => {
                                             </div>
                                             <span className="text-sm font-medium text-neutral-600">{product.userFirstName} {product.userLastName}</span>
                                         </div>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <span className="text-sm font-bold text-emerald-600">
+                                            {product.price} ETB
+                                        </span>
                                     </td>
                                     <td className="px-8 py-6">
                                         <div className="flex flex-col gap-1 text-neutral-600">

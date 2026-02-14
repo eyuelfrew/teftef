@@ -11,7 +11,14 @@ import {
     User,
     Package,
     Landmark,
-    CreditCard
+    CreditCard,
+    X,
+    Info,
+    Calendar,
+    Mail,
+    Phone,
+    MapPin,
+    Tag
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import BoostModerationModal from '../../components/ui/BoostModerationModal';
@@ -24,6 +31,60 @@ const BoostRequestManagement = () => {
     const [processingId, setProcessingId] = useState(null);
     const [moderatingRequest, setModeratingRequest] = useState(null);
     const [view, setView] = useState('pending'); // 'pending' or 'history'
+    const [detailUser, setDetailUser] = useState(null);
+    const [detailProduct, setDetailProduct] = useState(null);
+    const [detailPackage, setDetailPackage] = useState(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+
+    const handleViewUser = async (id, snapshot = null) => {
+        if (snapshot) {
+            setDetailUser({ ...snapshot, isSnapshot: true });
+            return;
+        }
+        setDetailLoading(true);
+        try {
+            const response = await api.get(`/admin/boost-packages/users/${id}`);
+            setDetailUser(response.data.data.user);
+        } catch (err) {
+            alert("Failed to fetch user details");
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
+    const handleViewProduct = async (id, snapshot = null) => {
+        if (snapshot) {
+            setDetailProduct({ ...snapshot, isSnapshot: true });
+            return;
+        }
+        setDetailLoading(true);
+        try {
+            const response = await api.get(`/products/${id}`);
+            setDetailProduct(response.data.data.product);
+        } catch (err) {
+            alert("Failed to fetch product details");
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
+    const handleViewPackage = async (id, snapshot = null) => {
+        if (snapshot) {
+            setDetailPackage({ ...snapshot, isSnapshot: true });
+            return;
+        }
+        setDetailLoading(true);
+        try {
+            const response = await api.get(`/admin/boost-packages/${id}`);
+            setDetailUser(null); // Close others
+            setDetailProduct(null);
+            setDetailPackage(response.data.data.boostPackage);
+        } catch (err) {
+            alert("Failed to fetch package details");
+        } finally {
+            setDetailLoading(false);
+        }
+    };
 
     const fetchRequests = async () => {
         setLoading(true);
@@ -61,7 +122,7 @@ const BoostRequestManagement = () => {
     const handleReject = (id) => {
         const reason = window.prompt('Enter rejection reason:', 'Payment verification failed');
         if (reason !== null) {
-            handleVerify(id, 'rejected', reason);
+            handleVerify(id, 'rejected', null, reason);
         }
     };
 
@@ -133,10 +194,11 @@ const BoostRequestManagement = () => {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-neutral-50 bg-neutral-50/50">
-                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Product / User</th>
-                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Payment Destination</th>
+                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 text-center">User ID</th>
+                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 text-center">Product ID</th>
+                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 text-center">Package ID</th>
+                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Payment</th>
                                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Transaction ID</th>
-                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Plan & Price</th>
                                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Schedule</th>
                                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Status</th>
                                 {view === 'pending' && (
@@ -154,74 +216,68 @@ const BoostRequestManagement = () => {
                             {filteredRequests.map((req) => (
                                 <tr key={req.id} className="hover:bg-neutral-50/50 transition-colors group">
                                     <td className="px-6 py-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-xl bg-neutral-100 flex items-center justify-center overflow-hidden border border-neutral-200">
-                                                {req.product?.images?.[0] ? (
-                                                    <img src={`${import.meta.env.VITE_BACKEND}${req.product.images[0]}`} alt="" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <Package size={20} className="text-neutral-400" />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-[#0a0a0a] line-clamp-1">{req.product?.name || 'Deleted Product'}</p>
-                                                <div className="flex items-center gap-2 mt-0.5">
-                                                    <User size={12} className="text-neutral-400" />
-                                                    <span className="text-[11px] text-neutral-500">{req.user?.email}</span>
-                                                </div>
-                                            </div>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span className="text-xs font-mono text-neutral-500">#{req.userId || 'N/A'}</span>
+                                            <button
+                                                onClick={() => handleViewUser(req.userId, view === 'history' ? { id: req.userId, email: req.userEmail, name: req.userFullName } : null)}
+                                                className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-400 hover:text-blue-600 transition-colors"
+                                            >
+                                                <User size={14} />
+                                            </button>
                                         </div>
                                     </td>
                                     <td className="px-6 py-5">
-                                        {req.agent ? (
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-bold text-[#0a0a0a] flex items-center gap-1.5">
-                                                    <Landmark size={14} className="text-neutral-400" /> {req.agent.name}
-                                                </p>
-                                                <p className="text-[11px] text-neutral-500 font-medium">
-                                                    {req.agent.bankName} - {req.agent.accountNumber}
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <div className="text-[11px] text-neutral-400 font-medium italic">
-                                                Legacy Request ({req.bankName || 'N/A'})
-                                            </div>
-                                        )}
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span className="text-xs font-mono text-neutral-500">#{req.productId || 'N/A'}</span>
+                                            <button
+                                                onClick={() => handleViewProduct(req.productId, view === 'history' ? { id: req.productId, name: req.productName, price: req.productPrice } : null)}
+                                                className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-400 hover:text-emerald-600 transition-colors"
+                                            >
+                                                <Package size={14} />
+                                            </button>
+                                        </div>
                                     </td>
                                     <td className="px-6 py-5">
-                                        <code className="px-2.5 py-1 bg-neutral-100 rounded-lg text-xs font-mono text-neutral-600">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span className="text-xs font-mono text-neutral-500">#{view === 'history' ? (req.packageId || 'Snap') : (req.packageId || 'N/A')}</span>
+                                            <button
+                                                onClick={() => handleViewPackage(req.packageId, view === 'history' ? { id: req.packageId, name: req.packageName, durationHours: req.packageDurationHours, price: req.paidAmount } : null)}
+                                                className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-400 hover:text-amber-600 transition-colors"
+                                            >
+                                                <Zap size={14} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <CreditCard size={14} className="text-neutral-400" />
+                                            <span className="text-xs font-bold text-neutral-600">
+                                                {view === 'history' ? req.paidAmount : (req.package?.price || 0)} ETB
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-5">
+                                        <code className="px-2 py-1 bg-neutral-100 rounded text-[10px] font-mono text-neutral-500">
                                             {req.transactionId}
                                         </code>
                                     </td>
                                     <td className="px-6 py-5">
-                                        <div>
-                                            <p className="text-sm font-bold text-[#0a0a0a]">{req.package?.name}</p>
-                                            <p className="text-xs text-[#0a0a0a] font-medium mt-1">
-                                                {req.package?.durationHours >= 24
-                                                    ? `${Math.floor(req.package.durationHours / 24)}d`
-                                                    : `${req.package?.durationHours}h`} • {req.package?.price} ETB
-                                            </p>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5">
                                         {req.startTime ? (
-                                            <div className="text-[11px] text-[#0a0a0a] font-medium">
-                                                <p>{new Date(req.startTime).toLocaleDateString()} {new Date(req.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                                <p className="text-neutral-400 flex items-center gap-1 mt-0.5"><Clock size={10} /> {new Date(req.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                            <div className="text-[10px] text-neutral-600 font-medium">
+                                                <p>{new Date(req.startTime).toLocaleDateString()}</p>
+                                                <p className="text-neutral-400">{new Date(req.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                             </div>
                                         ) : (
-                                            <span className="text-[11px] text-neutral-400 italic">Immediate</span>
+                                            <span className="text-[10px] text-neutral-400 italic">Immediate</span>
                                         )}
                                     </td>
                                     <td className="px-6 py-5">
                                         <span className={cn(
-                                            "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
+                                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border",
                                             req.status === 'pending' && "bg-amber-500/10 text-amber-600 border-amber-500/20",
                                             req.status === 'approved' && "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
                                             req.status === 'rejected' && "bg-red-500/10 text-red-600 border-red-500/20",
                                         )}>
-                                            {req.status === 'pending' && <Clock size={12} />}
-                                            {req.status === 'approved' && <CheckCircle2 size={12} />}
-                                            {req.status === 'rejected' && <XCircle size={12} />}
                                             {req.status}
                                         </span>
                                     </td>
@@ -288,6 +344,144 @@ const BoostRequestManagement = () => {
                 onApprove={handleVerify}
                 request={moderatingRequest}
             />
+            {/* Detail Modals */}
+            {(detailUser || detailLoading) && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#0a0a0a]/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="px-8 py-6 border-b border-neutral-100 flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-[#0a0a0a]">User Details</h3>
+                            <button onClick={() => setDetailUser(null)} className="p-2 hover:bg-neutral-100 rounded-full transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            {detailLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="animate-spin text-neutral-400" size={32} />
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center border border-blue-100 text-blue-600">
+                                            <User size={32} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-lg font-bold text-[#0a0a0a]">{detailUser.name || `${detailUser.first_name} ${detailUser.last_name}`}</p>
+                                            <p className="text-sm text-neutral-400 font-medium tracking-tight">
+                                                User ID: #{detailUser.id} {detailUser.isSnapshot && <span className="ml-2 text-amber-500 bg-amber-50 px-2 py-0.5 rounded text-[10px] uppercase">Snapshot</span>}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4 pt-4 border-t border-neutral-50">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-neutral-50 flex items-center justify-center text-neutral-400">
+                                                <Mail size={16} />
+                                            </div>
+                                            <div className="space-y-0.5">
+                                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Email Address</p>
+                                                <p className="text-sm font-semibold text-[#0a0a0a]">{detailUser.email}</p>
+                                            </div>
+                                        </div>
+                                        {(detailUser.phone || detailUser.phone_number) && (
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-neutral-50 flex items-center justify-center text-neutral-400">
+                                                    <Phone size={16} />
+                                                </div>
+                                                <div className="space-y-0.5">
+                                                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Phone Number</p>
+                                                    <p className="text-sm font-semibold text-[#0a0a0a]">{detailUser.phone || detailUser.phone_number}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {(detailProduct || detailLoading) && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#0a0a0a]/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="px-8 py-6 border-b border-neutral-100 flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-[#0a0a0a]">
+                                {detailProduct?.isSnapshot ? 'Historical Snapshot' : 'Product Details'}
+                            </h3>
+                            <button onClick={() => setDetailProduct(null)} className="p-2 hover:bg-neutral-100 rounded-full transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-8">
+                            {detailLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="animate-spin text-neutral-400" size={32} />
+                                </div>
+                            ) : (
+                                <div className="flex gap-6">
+                                    <div className="w-32 h-32 rounded-2xl bg-neutral-100 flex items-center justify-center overflow-hidden border border-neutral-200 shrink-0">
+                                        {detailProduct.images?.[0] ? (
+                                            <img src={`${import.meta.env.VITE_BACKEND}${detailProduct.images[0]}`} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <Package size={40} className="text-neutral-400" />
+                                        )}
+                                    </div>
+                                    <div className="space-y-4 flex-1">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Tag size={12} className="text-blue-500" />
+                                                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">{detailProduct.category || 'Standard'}</span>
+                                            </div>
+                                            <p className="text-lg font-bold text-[#0a0a0a] leading-tight line-clamp-2">{detailProduct.name}</p>
+                                            <p className="text-sm text-neutral-400 font-medium mt-1">ID: #{detailProduct.id}</p>
+                                        </div>
+                                        <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Market Price</p>
+                                            <p className="text-2xl font-black text-emerald-700 tracking-tight">{detailProduct.price} ETB</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {detailPackage && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#0a0a0a]/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="px-8 py-6 border-b border-neutral-100 flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-[#0a0a0a]">Package Details</h3>
+                            <button onClick={() => setDetailPackage(null)} className="p-2 hover:bg-neutral-100 rounded-full transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center border border-amber-100 text-amber-600">
+                                    <Zap size={28} />
+                                </div>
+                                <div>
+                                    <p className="text-lg font-bold text-[#0a0a0a]">{detailPackage.name}</p>
+                                    <p className="text-sm text-neutral-400 font-medium tracking-tight">Package ID: #{detailPackage.id}</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 bg-neutral-50 rounded-2xl space-y-1">
+                                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5"><Clock size={10} /> Duration</p>
+                                    <p className="text-lg font-bold text-[#0a0a0a]">
+                                        {detailPackage.durationHours >= 24 ? `${Math.floor(detailPackage.durationHours / 24)}d` : `${detailPackage.durationHours}h`}
+                                    </p>
+                                </div>
+                                <div className="p-4 bg-neutral-50 rounded-2xl space-y-1">
+                                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5"><CreditCard size={10} /> Cost</p>
+                                    <p className="text-lg font-bold text-[#0a0a0a]">{detailPackage.price} ETB</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

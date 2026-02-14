@@ -17,6 +17,7 @@ router.route("/:id")
 
 router.get("/requests/all", boostController.getBoostRequests);
 router.post("/requests/:id/verify", boostController.verifyBoostRequest);
+router.get("/users/:id", boostController.getUserInfo);
 router.post("/active/:id/terminate", boostController.terminateBoost);
 
 // Agent Routes

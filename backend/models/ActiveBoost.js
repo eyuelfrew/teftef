@@ -12,7 +12,6 @@ module.exports = (sequelize) => {
             productId: {
                 type: DataTypes.INTEGER.UNSIGNED,
                 allowNull: false,
-                unique: true, // Only one active boost per original product
             },
             packageId: {
                 type: DataTypes.INTEGER.UNSIGNED,

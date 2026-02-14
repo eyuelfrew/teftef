@@ -9,25 +9,10 @@ module.exports = (sequelize) => {
                 autoIncrement: true,
                 primaryKey: true,
             },
-            originalRequestId: {
-                type: DataTypes.INTEGER.UNSIGNED,
-                allowNull: true,
-            },
-            productId: {
-                type: DataTypes.INTEGER.UNSIGNED,
-                allowNull: false,
-            },
-            packageId: {
-                type: DataTypes.INTEGER.UNSIGNED,
-                allowNull: false,
-            },
             userId: {
+                // Keep for user's personal revenue/boost history
                 type: DataTypes.INTEGER.UNSIGNED,
                 allowNull: false,
-            },
-            agentId: {
-                type: DataTypes.INTEGER.UNSIGNED,
-                allowNull: true,
             },
             transactionId: {
                 type: DataTypes.STRING(100),
@@ -37,13 +22,10 @@ module.exports = (sequelize) => {
                 type: DataTypes.STRING(100),
                 allowNull: true,
             },
-            status: {
-                type: DataTypes.ENUM("approved", "rejected"),
+            paidAmount: {
+                type: DataTypes.DECIMAL(10, 2),
                 allowNull: false,
-            },
-            rejectionReason: {
-                type: DataTypes.TEXT,
-                allowNull: true,
+                defaultValue: 0,
             },
             startTime: {
                 type: DataTypes.DATE,
@@ -56,13 +38,39 @@ module.exports = (sequelize) => {
             processedAt: {
                 type: DataTypes.DATE,
                 defaultValue: DataTypes.NOW,
-            }
+            },
+            // Denormalized Product Metadata (Snapshot)
+            productName: {
+                type: DataTypes.STRING(255),
+                allowNull: true,
+            },
+            productPrice: {
+                type: DataTypes.DECIMAL(10, 2),
+                allowNull: true,
+            },
+            // Denormalized Package Metadata (Snapshot)
+            packageName: {
+                type: DataTypes.STRING(100),
+                allowNull: true,
+            },
+            packageDurationHours: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+            },
+            // Denormalized User Metadata (Snapshot)
+            userEmail: {
+                type: DataTypes.STRING(255),
+                allowNull: true,
+            },
+            userFullName: {
+                type: DataTypes.STRING(255),
+                allowNull: true,
+            },
         },
         {
             tableName: "boost_history",
             timestamps: true,
             indexes: [
-                { fields: ["productId"] },
                 { fields: ["userId"] },
                 { fields: ["transactionId"] }
             ]

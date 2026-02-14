@@ -17,6 +17,7 @@ const defineNormalCategory = require("./NormalCategory");
 const defineRefreshToken = require("./RefreshToken");
 const defineActiveBoost = require("./ActiveBoost");
 const defineBoostHistory = require("./BoostHistory");
+const defineSearchTracking = require("./SearchTracking");
 
 // Initialize models
 const Category = defineCategory(sequelize);
@@ -35,6 +36,7 @@ const NormalCategory = defineNormalCategory(sequelize);
 const RefreshToken = defineRefreshToken(sequelize);
 const ActiveBoost = defineActiveBoost(sequelize);
 const BoostHistory = defineBoostHistory(sequelize);
+const { SearchLog, PopularSearch } = defineSearchTracking(sequelize);
 
 // Associations
 Product.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });
@@ -45,10 +47,7 @@ BoostRequest.belongsTo(BoostPackage, { foreignKey: "packageId", as: "package", c
 BoostRequest.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });
 BoostRequest.belongsTo(PaymentAgent, { foreignKey: "agentId", as: "agent", constraints: false });
 
-BoostHistory.belongsTo(Product, { foreignKey: "productId", as: "product", constraints: false });
-BoostHistory.belongsTo(BoostPackage, { foreignKey: "packageId", as: "package", constraints: false });
 BoostHistory.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });
-BoostHistory.belongsTo(PaymentAgent, { foreignKey: "agentId", as: "agent", constraints: false });
 
 Product.hasMany(BoostRequest, { foreignKey: "productId", as: "boostRequests", constraints: false });
 
@@ -111,4 +110,6 @@ module.exports = {
     RefreshToken,
     ActiveBoost,
     BoostHistory,
+    SearchLog,
+    PopularSearch,
 };

@@ -19,6 +19,7 @@ const productRoutes = require("./routes/product.routes");
 const sponsorshipRoutes = require("./routes/sponsorship.routes");
 const boostRoutes = require("./routes/boost.routes");
 const attributeRoutes = require("./routes/categoryAttribute.routes");
+const searchRoutes = require("./routes/search.routes");
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -39,7 +40,7 @@ const app = express();
 ===================================================== */
 app.use(
   cors({
-    origin: CLIENT_ORIGIN,
+    origin: ["https://teftefadmin.virallinkdigital.com", "https://teftef.virallinkdigital.com", "http://localhost:5173", "http://localhost:5174"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -104,6 +105,17 @@ app.get("/", (req, res) => {
     message: "Teftef E-commerce Admin API is running 🚀",
   });
 });
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    message: "Backend is running and healthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 // Routes
 app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/auth", authRoutes);
@@ -114,6 +126,7 @@ app.use("/api/products", productRoutes);
 app.use("/api/sponsorships", sponsorshipRoutes);
 app.use("/api/admin/boost-packages", boostRoutes);
 app.use("/api/attributes", attributeRoutes);
+app.use("/api/search-analytics", searchRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -79,19 +79,14 @@ exports.deleteAgent = asyncHandler(async (req, res, next) => {
 // Request Management
 exports.getBoostRequests = asyncHandler(async (req, res, next) => {
     const { history } = req.query;
-    const Model = history === "true" ? BoostHistory : BoostRequest;
+    const isHistory = history === "true";
+    const Model = isHistory ? BoostHistory : BoostRequest;
 
     const requests = await Model.findAll({
-        include: [
-            { model: Product, as: "product", attributes: ["id", "name", "price", "images"] },
-            { model: BoostPackage, as: "package" },
-            { model: Users, as: "user", attributes: ["id", "first_name", "last_name", "email"] },
-            { model: PaymentAgent, as: "agent" }
-        ],
         order: [["createdAt", "DESC"]],
     });
 
-    res.status(200).json({ status: "success", results: requests.length, data: { requests, isHistory: history === "true" } });
+    res.status(200).json({ status: "success", results: requests.length, data: { requests, isHistory } });
 });
 
 exports.verifyBoostRequest = asyncHandler(async (req, res, next) => {
@@ -102,7 +97,13 @@ exports.verifyBoostRequest = asyncHandler(async (req, res, next) => {
         return next(new AppError("Invalid status", 400));
     }
 
-    const boostRequest = await BoostRequest.findByPk(id, { include: [{ model: BoostPackage, as: "package" }] });
+    const boostRequest = await BoostRequest.findByPk(id, {
+        include: [
+            { model: BoostPackage, as: "package" },
+            { model: Product, as: "product" },
+            { model: Users, as: "user", attributes: ["first_name", "last_name", "email"] }
+        ]
+    });
     if (!boostRequest) return next(new AppError("Boost request not found", 404));
     if (boostRequest.status !== "pending") return next(new AppError("Already processed", 400));
 
@@ -149,6 +150,13 @@ exports.verifyBoostRequest = asyncHandler(async (req, res, next) => {
             await activeBoost.update(activeBoostData);
         }
 
+        // Sync flags to the original Product table for user-side visibility
+        await product.update({
+            isBoosted: true,
+            boostExpiresAt: expiresAt,
+            boostPackageId: boostRequest.packageId
+        });
+
         // Update the request with the actual applied times
         boostRequest.startTime = startsAt;
         boostRequest.endTime = expiresAt;
@@ -156,28 +164,33 @@ exports.verifyBoostRequest = asyncHandler(async (req, res, next) => {
     } else {
         boostRequest.status = "rejected";
         boostRequest.rejectionReason = rejectionReason || "Payment verification failed";
+        await boostRequest.save();
+        return res.status(200).json({ status: "success", message: "Request rejected and kept in queue." });
     }
 
-    // 1. Save to History (Permanent)
+    // 1. Save to History (Permanent Denormalized Snapshot) - ONLY FOR APPROVED
     await BoostHistory.create({
-        originalRequestId: boostRequest.id,
-        productId: boostRequest.productId,
-        packageId: boostRequest.packageId,
         userId: boostRequest.userId,
-        agentId: boostRequest.agentId,
         transactionId: boostRequest.transactionId,
         bankName: boostRequest.bankName,
-        status: boostRequest.status,
-        rejectionReason: boostRequest.rejectionReason,
+        paidAmount: boostRequest.package?.price || 0,
         startTime: boostRequest.startTime,
         endTime: boostRequest.endTime,
-        processedAt: new Date()
+        processedAt: new Date(),
+
+        // Snapshot Data
+        productName: boostRequest.product?.name || "Deleted Product",
+        productPrice: boostRequest.product?.price || 0,
+        packageName: boostRequest.package?.name || "Deleted Package",
+        packageDurationHours: boostRequest.package?.durationHours || 0,
+        userEmail: boostRequest.user?.email || "Deleted User",
+        userFullName: boostRequest.user ? `${boostRequest.user.first_name} ${boostRequest.user.last_name}` : "Deleted User"
     });
 
-    // 2. Remove from active Requests table (Keep it lean)
+    // 2. Remove from active Requests table
     await boostRequest.destroy();
 
-    res.status(200).json({ status: "success", message: `Request ${status} and archived.` });
+    res.status(200).json({ status: "success", message: `Request approved and archived.` });
 });
 
 exports.terminateBoost = asyncHandler(async (req, res, next) => {
@@ -188,7 +201,7 @@ exports.terminateBoost = asyncHandler(async (req, res, next) => {
 
     await activeBoost.destroy();
 
-    // Also update the product flags
+    // Also update the product flags for status visibility
     const product = await Product.findByPk(id);
     if (product) {
         product.isBoosted = false;
@@ -198,4 +211,19 @@ exports.terminateBoost = asyncHandler(async (req, res, next) => {
     }
 
     res.status(200).json({ status: "success", message: "Boost terminated successfully" });
+});
+
+exports.getUserInfo = asyncHandler(async (req, res, next) => {
+    const user = await Users.findByPk(req.params.id, {
+        attributes: ["id", "first_name", "last_name", "email", "phone_number", "profile_pic", "createdAt"]
+    });
+
+    if (!user) {
+        return next(new AppError("User not found", 404));
+    }
+
+    res.status(200).json({
+        status: "success",
+        data: { user }
+    });
 });
