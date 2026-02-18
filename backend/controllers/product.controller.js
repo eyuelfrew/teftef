@@ -1,5 +1,7 @@
 const { Product, Category, Users, BoostPackage, BoostRequest, PaymentAgent, ActiveBoost, SearchLog, PopularSearch } = require("../models");
 const { Op } = require("sequelize");
+const fs = require('fs');
+const path = require('path');
 const asyncHandler = require("../middlewares/asyncHandler");
 const AppError = require("../utils/AppError");
 const { logSearch } = require("../controllers/search.controller");
@@ -43,10 +45,10 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
     // Log the search if a search term was provided
     if (search) {
         await logSearch(
-            search, 
-            req.user?.id, 
-            req.ip, 
-            req.get('User-Agent'), 
+            search,
+            req.user?.id,
+            req.ip,
+            req.get('User-Agent'),
             rows.length,
             req.get('Referer')
         );
@@ -174,29 +176,27 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
 
     // After product creation, we should move temp files to product-specific directory
     if (req.files && req.files.length > 0) {
-        const fs = require('fs');
-        const path = require('path');
-        
+
         // Create product-specific directory
         const productDir = path.join(__dirname, '..', 'public', 'uploads', 'products', String(product.id));
         if (!fs.existsSync(productDir)) {
             fs.mkdirSync(productDir, { recursive: true });
         }
-        
+
         // Move files from temp to product directory
         const newImages = [];
         for (const file of req.files) {
             const tempFilePath = file.path;
             const fileName = path.basename(tempFilePath);
             const newFilePath = path.join(productDir, fileName);
-            
+
             // Move the file
             fs.renameSync(tempFilePath, newFilePath);
-            
+
             // Update the image path in the database
             newImages.push(`/uploads/products/${product.id}/${fileName}`);
         }
-        
+
         // Update the product with the new image paths
         await product.update({ images: newImages });
     }
@@ -222,30 +222,28 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
     const { name, description, price, category, brand, metadata, status } = req.body;
 
     if (req.files && req.files.length > 0) {
-        const fs = require('fs');
-        const path = require('path');
-        
+
         // Create product-specific directory if it doesn't exist
         const productDir = path.join(__dirname, '..', 'public', 'uploads', 'products', String(product.id));
         if (!fs.existsSync(productDir)) {
             fs.mkdirSync(productDir, { recursive: true });
         }
-        
+
         // Move files from temp to product directory (if they were uploaded to temp)
         const newImages = [];
         for (const file of req.files) {
             const tempFilePath = file.path;
             const fileName = path.basename(tempFilePath);
             const newFilePath = path.join(productDir, fileName);
-            
+
             // Move the file if it's not already in the correct location
             if (tempFilePath !== newFilePath) {
                 fs.renameSync(tempFilePath, newFilePath);
             }
-            
+
             newImages.push(`/uploads/products/${product.id}/${fileName}`);
         }
-        
+
         product.images = newImages;
     }
 
@@ -276,12 +274,30 @@ exports.deleteProduct = asyncHandler(async (req, res, next) => {
         return next(new AppError("Unauthorized", 403));
     }
 
+
+
+    const deletedId = product.id;
+
+    // Remove product image directory if it exists
+    const productDir = path.join(__dirname, '..', 'public', 'uploads', 'products', String(deletedId));
+    if (fs.existsSync(productDir)) {
+        try {
+            fs.rmSync(productDir, { recursive: true, force: true });
+            console.log(`Deleted image directory for product ${deletedId}`);
+        } catch (err) {
+            console.error(`Failed to delete images for product ${deletedId}:`, err);
+            // We continue even if file deletion fails
+        }
+    }
+
     await product.destroy();
 
-    res.status(204).json({
+    res.status(200).json({
         status: "success",
-        data: null
+        message: "Product deleted successfully",
+        data: { id: deletedId }
     });
+
 });
 
 exports.getBoostPackages = asyncHandler(async (req, res, next) => {

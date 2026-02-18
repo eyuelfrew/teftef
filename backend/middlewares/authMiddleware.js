@@ -9,13 +9,16 @@ const AppError = require("../utils/AppError");
  */
 const requireUserOrAdmin = async (req, res, next) => {
     try {
-        let token = req.cookies?.user_token || req.cookies?.admin_token;
+        let token;
 
-        if (!token && req.headers.authorization) {
-            const authHeader = req.headers.authorization;
-            if (authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7);
-            }
+        // Check Authorization header first (most explicit)
+        if (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+            token = req.headers.authorization.split(" ")[1];
+        }
+
+        // Fallback to cookies if no header is present
+        if (!token) {
+            token = req.cookies?.user_token || req.cookies?.admin_token;
         }
 
         if (!token) {

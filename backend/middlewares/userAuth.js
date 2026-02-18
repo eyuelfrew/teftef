@@ -16,14 +16,14 @@ const AppError = require("../utils/AppError");
  */
 const requireUser = async (req, res, next) => {
     try {
-        // Get token from cookie or Authorization header
-        let token = req.cookies?.user_token;
+        let token;
 
-        if (!token && req.headers.authorization) {
-            const authHeader = req.headers.authorization;
-            if (authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7);
-            }
+        if (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+            token = req.headers.authorization.split(" ")[1];
+        }
+
+        if (!token) {
+            token = req.cookies?.user_token;
         }
 
         if (!token) {
@@ -73,13 +73,14 @@ const requireUser = async (req, res, next) => {
  */
 const optionalAuth = async (req, res, next) => {
     try {
-        let token = req.cookies?.user_token;
+        let token;
 
-        if (!token && req.headers.authorization) {
-            const authHeader = req.headers.authorization;
-            if (authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7);
-            }
+        if (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+            token = req.headers.authorization.split(" ")[1];
+        }
+
+        if (!token) {
+            token = req.cookies?.user_token;
         }
 
         if (token) {
