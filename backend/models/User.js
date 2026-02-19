@@ -56,6 +56,19 @@ module.exports = (sequelize) => {
                 allowNull: false,
                 defaultValue: false,
             },
+            is_email_verified: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            email_otp_code: {
+                type: DataTypes.STRING(10),
+                allowNull: true,
+            },
+            email_otp_expires_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
             otp_code: {
                 type: DataTypes.STRING(10),
                 allowNull: true,
