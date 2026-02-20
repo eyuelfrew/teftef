@@ -12,7 +12,6 @@ yarn-error.log*
 .env.test
 
 # Firebase credentials (IMPORTANT - DO NOT COMMIT!)
-*.json
 my-first-app-*.json
 *firebase*.json
 *-adminsdk-*.json
@@ -20,7 +19,7 @@ my-first-app-*.json
 # Uploads
 uploads/
 
-# Logs
+# Logs  
 logs/
 *.log
 

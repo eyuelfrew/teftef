@@ -22,12 +22,10 @@ const ActiveBoostManagement = () => {
     const fetchActiveBoosts = async () => {
         try {
             setLoading(true);
-            // Added timestamp to bypass browser cache (304 issues)
-            const response = await api.get(`/products/promoted/boosted?t=${Date.now()}`);
-            console.log("Active Boosts Response:", response.data);
+            const response = await api.get('/admin/active-boosts');
 
-            if (response.data && response.data.data && Array.isArray(response.data.data.products)) {
-                setBoosts(response.data.data.products);
+            if (response.data && response.data.data && Array.isArray(response.data.data.activeBoosts)) {
+                setBoosts(response.data.data.activeBoosts);
             } else {
                 console.warn("Unexpected API response structure", response.data);
                 setBoosts([]);
@@ -49,8 +47,7 @@ const ActiveBoostManagement = () => {
 
         setTerminatingId(id);
         try {
-            // We'll need a backend endpoint for this
-            await api.post(`/admin/boost-packages/active/${id}/terminate`);
+            await api.post(`/admin/active-boosts/${id}/terminate`);
             await fetchActiveBoosts();
         } catch (err) {
             alert("Failed to terminate boost: " + (err.response?.data?.message || err.message));

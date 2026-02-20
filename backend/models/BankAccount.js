@@ -1,8 +1,8 @@
 const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
-    const PaymentAgent = sequelize.define(
-        "PaymentAgent",
+    const BankAccount = sequelize.define(
+        "BankAccount",
         {
             id: {
                 type: DataTypes.INTEGER.UNSIGNED,
@@ -12,6 +12,7 @@ module.exports = (sequelize) => {
             name: {
                 type: DataTypes.STRING(100),
                 allowNull: false,
+                comment: "Account Holder Name",
             },
             bankName: {
                 type: DataTypes.STRING(100),
@@ -27,10 +28,10 @@ module.exports = (sequelize) => {
             },
         },
         {
-            tableName: "payment_agents",
+            tableName: "bank_accounts",
             timestamps: true,
         }
     );
 
-    return PaymentAgent;
+    return BankAccount;
 };

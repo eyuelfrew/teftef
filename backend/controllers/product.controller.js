@@ -1,4 +1,4 @@
-const { Product, Category, Users, BoostPackage, BoostRequest, PaymentAgent, ActiveBoost, SearchLog, PopularSearch } = require("../models");
+const { Product, Category, Users, BoostPackage, BoostRequest, BankAccount, ActiveBoost, SearchLog, PopularSearch } = require("../models");
 const { Op } = require("sequelize");
 const fs = require('fs');
 const path = require('path');
@@ -303,7 +303,7 @@ exports.deleteProduct = asyncHandler(async (req, res, next) => {
 exports.getBoostPackages = asyncHandler(async (req, res, next) => {
     const packages = await BoostPackage.findAll({
         where: { isEnabled: true },
-        order: [["durationHours", "ASC"]]
+        order: [["durationDays", "ASC"]]
     });
 
     res.status(200).json({
@@ -312,15 +312,15 @@ exports.getBoostPackages = asyncHandler(async (req, res, next) => {
     });
 });
 
-exports.getPaymentAgents = asyncHandler(async (req, res, next) => {
-    const agents = await PaymentAgent.findAll({
+exports.getBankAccount = asyncHandler(async (req, res, next) => {
+    const account = await BankAccount.findOne({
         where: { isEnabled: true },
-        order: [["name", "ASC"]]
+        attributes: ["id", "name", "bankName", "accountNumber"],
     });
 
     res.status(200).json({
         status: "success",
-        data: { agents }
+        data: { bankAccount: account }
     });
 });
 
@@ -343,10 +343,9 @@ exports.getMyBoostHistory = asyncHandler(async (req, res, next) => {
 
 exports.activateBoost = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
-    const { packageId, transactionId, agentId } = req.body;
+    const { packageId, transactionId } = req.body;
 
     if (!transactionId) return next(new AppError("Transaction ID is required", 400));
-    if (!agentId) return next(new AppError("Please select a payment agent", 400));
 
     const product = await Product.findByPk(id);
     if (!product) return next(new AppError("Product not found", 404));
@@ -358,8 +357,11 @@ exports.activateBoost = asyncHandler(async (req, res, next) => {
     const boostPackage = await BoostPackage.findByPk(packageId);
     if (!boostPackage || !boostPackage.isEnabled) return next(new AppError("Invalid package", 400));
 
-    const agent = await PaymentAgent.findByPk(agentId);
-    if (!agent || !agent.isEnabled) return next(new AppError("Invalid agent", 400));
+    // Get the default bank account
+    const account = await BankAccount.findOne({ where: { isEnabled: true } });
+    if (!account) {
+        return next(new AppError("No bank account configured for payments. Please contact support.", 400));
+    }
 
     // Check for existing pending request for THIS product
     const pendingRequest = await BoostRequest.findOne({
@@ -381,8 +383,8 @@ exports.activateBoost = asyncHandler(async (req, res, next) => {
         packageId: boostPackage.id,
         userId: req.user.id,
         transactionId,
-        agentId: agent.id,
-        bankName: agent.bankName,
+        bankAccountId: account.id,
+        bankName: account.bankName,
         status: "pending"
     });
 
@@ -433,6 +435,50 @@ exports.getBoostedProducts = asyncHandler(async (req, res, next) => {
         results: products.length,
         data: {
             products,
+            serverTime: now
+        }
+    });
+});
+
+exports.getActiveBoostedProducts = asyncHandler(async (req, res, next) => {
+    const now = new Date();
+
+    // 1. "Just-In-Time" Cleanup: Find expired boosts
+    const expiredBoosts = await ActiveBoost.findAll({
+        where: { expiresAt: { [Op.lte]: now } },
+        attributes: ["productId"]
+    });
+
+    if (expiredBoosts.length > 0) {
+        const expiredProductIds = expiredBoosts.map(b => b.productId);
+
+        // Remove from standalone table
+        await ActiveBoost.destroy({
+            where: { productId: expiredProductIds }
+        });
+
+        // Update original product flags to keep them in sync
+        await Product.update(
+            { isBoosted: false, boostExpiresAt: null, boostPackageId: null },
+            { where: { id: expiredProductIds } }
+        );
+
+        console.log(`🧹 Lazy cleanup: Removed ${expiredBoosts.length} expired boosts.`);
+    }
+
+    // 2. Fetch only live boosted products (Started and not yet Expired)
+    const boostedProducts = await ActiveBoost.findAll({
+        where: {
+            startsAt: { [Op.lte]: now }
+        },
+        order: [["startsAt", "DESC"]]
+    });
+
+    res.status(200).json({
+        status: "success",
+        results: boostedProducts.length,
+        data: {
+            boostedProducts,
             serverTime: now
         }
     });

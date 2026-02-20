@@ -1,15 +1,16 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { Users: User } = require("../models");
-const { signUserToken, setUserCookie } = require("../utils/jwt");
+const { signUserToken, setUserCookie, clearUserCookie } = require("../utils/jwt");
 const AppError = require("../utils/AppError");
 const asyncHandler = require("../middlewares/asyncHandler");
 
-const signToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || "90d",
-    });
+exports.logout = (req, res) => {
+    clearUserCookie(res);
+    res.status(200).json({ status: "success", message: "Logged out successfully" });
 };
+
+// Token logic moved to utils/jwt.js
 
 // Generate 6-digit OTP
 const generateOtp = () => {
@@ -17,7 +18,7 @@ const generateOtp = () => {
 };
 
 exports.syncUser = asyncHandler(async (req, res, next) => {
-    const { email, display_name, photo_url, phone_number, provider, id_token } = req.body;
+    const { email, display_name, photo_url, phone_number, provider } = req.body;
 
     if (!email) {
         return next(new AppError("Email is required", 400));
@@ -26,39 +27,56 @@ exports.syncUser = asyncHandler(async (req, res, next) => {
     let user = await User.findOne({ where: { email } });
 
     if (!user && phone_number) {
-        // Try finding by phone number if email didn't match
         user = await User.findOne({ where: { phone_number } });
-
-        // If we found a user by phone number but the email is different (or missing on the user),
-        // we might want to update the email or handle it.
-        // For this logic, let's assume if found by phone, it's the same person.
         if (user && !user.email) {
             user.email = email;
         }
     }
 
     if (user) {
+        // Security Check: Blocked or Disabled
+        if (user.is_blocked) {
+            return next(new AppError("Your account has been blocked. Contact support.", 403));
+        }
+        if (user.status !== "active") {
+            return next(new AppError("Your account has been disabled. Contact support.", 403));
+        }
+
         // Update existing user
         user.last_login_at = new Date();
-        if (photo_url) user.profile_pic = photo_url;
+        if (photo_url && !user.profile_pic) user.profile_pic = photo_url;
+
         if (display_name) {
             const names = display_name.split(" ");
             if (!user.first_name) user.first_name = names[0];
             if (!user.last_name && names.length > 1) user.last_name = names.slice(1).join(" ");
         }
+
         if (phone_number && user.phone_number !== phone_number) {
-            // Check if another user already has this phone number
             const userWithPhone = await User.findOne({ where: { phone_number } });
             if (userWithPhone && userWithPhone.id !== user.id) {
                 return next(new AppError("This phone number is already linked to another account", 400));
             }
             user.phone_number = phone_number;
+            user.is_phone_verified = false; // Reset if changed via social
         }
 
         await user.save();
     } else {
         // Create new user
         const names = display_name ? display_name.split(" ") : ["User", ""];
+
+        let otp = null;
+        let otpExpiresAt = null;
+
+        // If social login provides a phone number, it still needs verification 
+        // as social providers usually only vouch for the email.
+        if (phone_number) {
+            otp = generateOtp();
+            otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+            console.log(`[OTP] Social login verification code for ${phone_number}: ${otp}`);
+        }
+
         user = await User.create({
             email,
             first_name: names[0],
@@ -66,7 +84,11 @@ exports.syncUser = asyncHandler(async (req, res, next) => {
             profile_pic: photo_url,
             auth_provider: provider || 'google',
             last_login_at: new Date(),
-            phone_number: phone_number || null
+            phone_number: phone_number || null,
+            is_phone_verified: false,
+            otp_code: otp,
+            otp_expires_at: otpExpiresAt,
+            status: "active"
         });
     }
 
@@ -78,13 +100,17 @@ exports.syncUser = asyncHandler(async (req, res, next) => {
         data: {
             user_id: user.id,
             access_token: accessToken,
+            requires_phone_verification: user.phone_number && !user.is_phone_verified,
             user: {
                 id: user.id,
                 email: user.email,
                 first_name: user.first_name,
                 last_name: user.last_name,
-                photo_url: user.profile_pic,
-                is_phone_verified: user.is_phone_verified
+                phone_number: user.phone_number,
+                profile_pic: user.profile_pic,
+                is_phone_verified: user.is_phone_verified,
+                is_email_verified: user.is_email_verified,
+                auth_provider: user.auth_provider
             }
         },
     });
@@ -472,17 +498,35 @@ exports.cancelRegistration = asyncHandler(async (req, res, next) => {
 
 /**
  * Request email verification OTP
- * Generates and sends OTP to user's email
+ * Can be used for a new email (not yet on profile) or the existing one.
  */
 exports.requestEmailVerification = asyncHandler(async (req, res, next) => {
+    const { email } = req.body;
     const user = await User.findByPk(req.user.id);
 
     if (!user) {
         return next(new AppError("User not found", 404));
     }
 
+    // If providing a new email
+    if (email && email !== user.email) {
+        // Check if email already exists on another account
+        const existingEmailUser = await User.findOne({ where: { email } });
+        if (existingEmailUser) {
+            return next(new AppError("This email is already in use by another account", 400));
+        }
+
+        // Update user email and set to unverified
+        user.email = email;
+        user.is_email_verified = false;
+    }
+
+    if (!user.email) {
+        return next(new AppError("Email address is required. Please provide it in the request body or update your profile.", 400));
+    }
+
     if (user.is_email_verified) {
-        return next(new AppError("Email is already verified", 400));
+        return next(new AppError("This email address is already verified", 400));
     }
 
     // Generate 6-digit OTP
@@ -494,13 +538,13 @@ exports.requestEmailVerification = asyncHandler(async (req, res, next) => {
     await user.save();
 
     // In production, send email with OTP
-    // For development, log the OTP
     console.log(`[EMAIL OTP] Verification code for ${user.email}: ${otp}`);
 
     res.status(200).json({
         status: "success",
         message: "OTP sent to your email. Please check your inbox.",
         data: {
+            email: user.email,
             // In development, include OTP for testing
             ...(process.env.NODE_ENV !== "production" && {
                 otp: otp

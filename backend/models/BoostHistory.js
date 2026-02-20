@@ -53,8 +53,8 @@ module.exports = (sequelize) => {
                 type: DataTypes.STRING(100),
                 allowNull: true,
             },
-            packageDurationHours: {
-                type: DataTypes.INTEGER.UNSIGNED,
+            packageDurationDays: {
+                type: DataTypes.DECIMAL(10, 6),
                 allowNull: true,
             },
             // Denormalized User Metadata (Snapshot)

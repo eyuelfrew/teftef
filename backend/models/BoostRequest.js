@@ -26,7 +26,7 @@ module.exports = (sequelize) => {
                 allowNull: false,
                 unique: true,
             },
-            agentId: {
+            bankAccountId: {
                 type: DataTypes.INTEGER.UNSIGNED,
                 allowNull: true,
             },

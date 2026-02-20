@@ -2,10 +2,8 @@ const jwt = require("jsonwebtoken");
 
 /**
  * Verify JWT access token
- * @param {string} token - The token to verify
- * @returns {object} - Decoded token payload
  */
-const verifyAccessToken = (token) => {
+const verifyToken = (token) => {
     try {
         return jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
@@ -14,48 +12,81 @@ const verifyAccessToken = (token) => {
 };
 
 /**
- * Sign user token
- * @param {number} userId - The user ID to sign
- * @returns {string} - Signed JWT token
+ * Get common cookie options
  */
-const signUserToken = (userId) => {
-    return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-    });
-};
-
-/**
- * Get cookie options for user token
- */
-const getUserCookieOptions = () => {
+const getCookieOptions = () => {
     const isProd = process.env.NODE_ENV === "production";
     return {
         httpOnly: true,
         secure: isProd,
-        sameSite: "none",
-        maxAge: (parseInt(process.env.JWT_COOKIE_DAYS, 10) || 7) * 24 * 60 * 60 * 1000,
+        sameSite: isProd ? "none" : "lax",
     };
+};
+
+/**
+ * Sign user token
+ */
+const signUserToken = (userId) => {
+    return jwt.sign(
+        { id: userId, role: "user" },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+    );
 };
 
 /**
  * Set user token cookie
  */
 const setUserCookie = (res, token) => {
-    const cookieOptions = getUserCookieOptions();
-    res.cookie("user_token", token, cookieOptions);
+    const maxAge = (parseInt(process.env.JWT_COOKIE_DAYS, 10) || 7) * 24 * 60 * 60 * 1000;
+    res.cookie("user_token", token, { ...getCookieOptions(), maxAge });
 };
 
 /**
  * Clear user token cookie
  */
 const clearUserCookie = (res) => {
-    const cookieOptions = getUserCookieOptions();
-    res.clearCookie("user_token", cookieOptions);
+    res.clearCookie("user_token", getCookieOptions());
+};
+
+/**
+ * Sign admin token
+ */
+const signAdminToken = (admin) => {
+    const payload = {
+        id: admin.id,
+        email: admin.email,
+        role: "admin",
+        is_super_admin: !!admin.is_super_admin,
+    };
+    return jwt.sign(
+        payload,
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_ADMIN_EXPIRES_IN || "1d" }
+    );
+};
+
+/**
+ * Set admin token cookie
+ */
+const setAdminCookie = (res, token) => {
+    const maxAge = (parseInt(process.env.JWT_ADMIN_COOKIE_DAYS, 10) || 1) * 24 * 60 * 60 * 1000;
+    res.cookie("admin_token", token, { ...getCookieOptions(), maxAge });
+};
+
+/**
+ * Clear admin token cookie
+ */
+const clearAdminCookie = (res) => {
+    res.clearCookie("admin_token", getCookieOptions());
 };
 
 module.exports = {
-    verifyAccessToken,
+    verifyToken,
     signUserToken,
     setUserCookie,
     clearUserCookie,
+    signAdminToken,
+    setAdminCookie,
+    clearAdminCookie,
 };

@@ -12,6 +12,7 @@ router.post("/sync-user", authController.syncUser); // Social login (Google, etc
 
 // Protected routes (authentication required)
 router.get("/me", requireUser, authController.getMe);
+router.post("/logout", requireUser, authController.logout);
 router.post("/request-otp", requireUser, authController.requestOtp);
 router.post("/verify-otp", requireUser, authController.verifyOtp);
 router.post("/verify-email", requireUser, authController.verifyEmail); // Verify email with OTP

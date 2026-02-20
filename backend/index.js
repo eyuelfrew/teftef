@@ -18,8 +18,12 @@ const categoryRoutes = require("./routes/category.routes");
 const productRoutes = require("./routes/product.routes");
 const sponsorshipRoutes = require("./routes/sponsorship.routes");
 const boostRoutes = require("./routes/boost.routes");
+const activeBoostsRoutes = require("./routes/active-boosts.routes");
+const boostRequestsRoutes = require("./routes/boost-requests.routes");
 const attributeRoutes = require("./routes/categoryAttribute.routes");
 const searchRoutes = require("./routes/search.routes");
+const bankAccountRoutes = require("./routes/bank-account.routes");
+const userManagementRoutes = require("./routes/userManagement.routes");
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -38,9 +42,20 @@ const app = express();
 /* ======================================================
    GLOBAL CORS
 ===================================================== */
+const origins = [
+  "https://teftefadmin.virallinkdigital.com",
+  "https://teftef.virallinkdigital.com",
+  "http://localhost:5173",
+  "http://localhost:5174"
+];
+
+if (CLIENT_ORIGIN && !origins.includes(CLIENT_ORIGIN)) {
+  origins.push(CLIENT_ORIGIN);
+}
+
 app.use(
   cors({
-    origin: ["https://teftefadmin.virallinkdigital.com", "https://teftef.virallinkdigital.com", "http://localhost:5173", "http://localhost:5174"],
+    origin: origins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -63,9 +78,6 @@ app.use(
   (req, res, next) => {
     res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     next();
   },
   express.static(path.join(__dirname, "public/uploads"), {
@@ -75,17 +87,6 @@ app.use(
   })
 );
 
-/* ======================================================
-   GLOBAL CORS
-====================================================== */
-app.use(
-  cors({
-    origin: CLIENT_ORIGIN,
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
 
 /* ======================================================
    LOGGING + BODY + COOKIES
@@ -117,16 +118,23 @@ app.get("/health", (req, res) => {
 });
 
 // Routes
-app.use("/api/admin/auth", adminAuthRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/admin/management", adminManagementRoutes);
-app.use("/api/ads", adRoutes);
-app.use("/api/categories", categoryRoutes);
-app.use("/api/products", productRoutes);
-app.use("/api/sponsorships", sponsorshipRoutes);
-app.use("/api/admin/boost-packages", boostRoutes);
-app.use("/api/attributes", attributeRoutes);
-app.use("/api/search-analytics", searchRoutes);
+// Admin Namespace
+app.use("/api/v1/admin/auth", adminAuthRoutes);
+app.use("/api/v1/admin/management", adminManagementRoutes);
+app.use("/api/v1/admin/boost-packages", boostRoutes);
+app.use("/api/v1/admin/active-boosts", activeBoostsRoutes);
+app.use("/api/v1/admin/boost-requests", boostRequestsRoutes);
+app.use("/api/v1/admin/bank-accounts", bankAccountRoutes);
+app.use("/api/v1/admin/users", userManagementRoutes);
+app.use("/api/v1/admin/search-analytics", searchRoutes);
+
+// User/Public Namespace
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/ads", adRoutes);
+app.use("/api/v1/categories", categoryRoutes);
+app.use("/api/v1/products", productRoutes);
+app.use("/api/v1/sponsorships", sponsorshipRoutes);
+app.use("/api/v1/attributes", attributeRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

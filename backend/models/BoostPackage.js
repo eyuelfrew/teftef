@@ -14,10 +14,10 @@ module.exports = (sequelize) => {
                 allowNull: false,
                 comment: "Name of the package (e.g., 24 Hours, 7 Days)",
             },
-            durationHours: {
-                type: DataTypes.INTEGER.UNSIGNED,
+            durationDays: {
+                type: DataTypes.DECIMAL(10, 6),
                 allowNull: false,
-                comment: "Duration in hours",
+                comment: "Duration in days (e.g., 1.0 for 24 hours, 0.000694 for 1 minute)",
             },
             price: {
                 type: DataTypes.DECIMAL(10, 2),

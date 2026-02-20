@@ -43,7 +43,7 @@ const BoostRequestManagement = () => {
         }
         setDetailLoading(true);
         try {
-            const response = await api.get(`/admin/boost-packages/users/${id}`);
+            const response = await api.get(`/admin/users/${id}`);
             setDetailUser(response.data.data.user);
         } catch (err) {
             alert("Failed to fetch user details");
@@ -89,7 +89,8 @@ const BoostRequestManagement = () => {
     const fetchRequests = async () => {
         setLoading(true);
         try {
-            const response = await api.get(`/admin/boost-packages/requests/all?history=${view === 'history'}`);
+            const url = view === 'history' ? '/admin/boost-requests/history' : '/admin/boost-requests';
+            const response = await api.get(url);
             setRequests(response.data.data.requests);
         } catch (err) {
             console.error("Failed to fetch boost requests", err);
@@ -105,7 +106,7 @@ const BoostRequestManagement = () => {
     const handleVerify = async (id, status, startTime = null, reason = '') => {
         setProcessingId(id);
         try {
-            await api.post(`/admin/boost-packages/requests/${id}/verify`, {
+            await api.post(`/admin/boost-requests/${id}/verify`, {
                 status,
                 rejectionReason: reason,
                 startTime
@@ -241,7 +242,7 @@ const BoostRequestManagement = () => {
                                         <div className="flex items-center justify-center gap-2">
                                             <span className="text-xs font-mono text-neutral-500">#{view === 'history' ? (req.packageId || 'Snap') : (req.packageId || 'N/A')}</span>
                                             <button
-                                                onClick={() => handleViewPackage(req.packageId, view === 'history' ? { id: req.packageId, name: req.packageName, durationHours: req.packageDurationHours, price: req.paidAmount } : null)}
+                                                onClick={() => handleViewPackage(req.packageId, view === 'history' ? { id: req.packageId, name: req.packageName, durationDays: req.packageDurationDays, price: req.paidAmount } : null)}
                                                 className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-400 hover:text-amber-600 transition-colors"
                                             >
                                                 <Zap size={14} />
@@ -470,7 +471,9 @@ const BoostRequestManagement = () => {
                                 <div className="p-4 bg-neutral-50 rounded-2xl space-y-1">
                                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5"><Clock size={10} /> Duration</p>
                                     <p className="text-lg font-bold text-[#0a0a0a]">
-                                        {detailPackage.durationHours >= 24 ? `${Math.floor(detailPackage.durationHours / 24)}d` : `${detailPackage.durationHours}h`}
+                                        {detailPackage.durationDays >= 1
+                                            ? `${detailPackage.durationDays}d`
+                                            : `${Math.round(detailPackage.durationDays * 1440)}m`}
                                     </p>
                                 </div>
                                 <div className="p-4 bg-neutral-50 rounded-2xl space-y-1">

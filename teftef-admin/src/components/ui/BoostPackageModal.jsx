@@ -5,24 +5,36 @@ import { cn } from '../../utils/cn';
 const BoostPackageModal = ({ isOpen, onClose, onSave, pkg }) => {
     const [formData, setFormData] = useState({
         name: '',
-        durationHours: 24,
+        durationDays: 1,
         price: 0,
         isEnabled: true,
     });
     const [loading, setLoading] = useState(false);
 
+    const durationOptions = [
+        { label: '1 Minute (Test)', value: 1 / 1440 },
+        { label: '5 Minutes (Test)', value: 5 / 1440 },
+        { label: '10 Minutes (Test)', value: 10 / 1440 },
+        { label: '1 Day', value: 1 },
+        { label: '7 Days', value: 7 },
+        { label: '14 Days', value: 14 },
+        { label: '1 Month', value: 30 },
+        { label: '2 Months', value: 60 },
+        { label: '6 Months', value: 180 },
+    ];
+
     useEffect(() => {
         if (pkg) {
             setFormData({
                 name: pkg.name,
-                durationHours: pkg.durationHours,
+                durationDays: pkg.durationDays || (pkg.durationHours / 24) || 1,
                 price: pkg.price,
                 isEnabled: pkg.isEnabled,
             });
         } else {
             setFormData({
                 name: '',
-                durationHours: 24,
+                durationDays: 1,
                 price: 0,
                 isEnabled: true,
             });
@@ -33,7 +45,7 @@ const BoostPackageModal = ({ isOpen, onClose, onSave, pkg }) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : (type === 'number' ? parseFloat(value) : value)
+            [name]: type === 'checkbox' ? checked : (type === 'number' || name === 'durationDays' ? parseFloat(value) : value)
         }));
     };
 
@@ -97,18 +109,22 @@ const BoostPackageModal = ({ isOpen, onClose, onSave, pkg }) => {
 
                         <div className="grid grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-semibold text-[#0a0a0a] mb-2 uppercase tracking-tight">Duration (Hours)</label>
+                                <label className="block text-sm font-semibold text-[#0a0a0a] mb-2 uppercase tracking-tight">Duration</label>
                                 <div className="relative group">
-                                    <Clock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400 group-focus-within:text-[#0a0a0a] transition-colors" />
-                                    <input
-                                        type="number"
-                                        name="durationHours"
-                                        value={formData.durationHours}
+                                    <Clock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400 group-focus-within:text-[#0a0a0a] transition-colors z-10" />
+                                    <select
+                                        name="durationDays"
+                                        value={formData.durationDays}
                                         onChange={handleChange}
-                                        min="1"
-                                        className="w-full rounded-xl bg-neutral-50 border-transparent focus:bg-white focus:border-[#0a0a0a] focus:ring-0 transition-all text-sm py-2.5 pl-10"
+                                        className="w-full rounded-xl bg-neutral-50 border-transparent focus:bg-white focus:border-[#0a0a0a] focus:ring-0 transition-all text-sm py-2.5 pl-10 appearance-none shadow-sm shadow-black/5"
                                         required
-                                    />
+                                    >
+                                        {durationOptions.map(opt => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
 

@@ -113,9 +113,9 @@ const BoostPackageManagement = () => {
                                     <div>
                                         <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Duration</p>
                                         <p className="text-sm font-semibold text-[#0a0a0a]">
-                                            {pkg.durationHours >= 24
-                                                ? `${Math.floor(pkg.durationHours / 24)} Days`
-                                                : `${pkg.durationHours} Hours`}
+                                            {pkg.durationDays >= 1
+                                                ? `${pkg.durationDays} Day${pkg.durationDays > 1 ? 's' : ''}`
+                                                : `${Math.round(pkg.durationDays * 1440)} Minutes`}
                                         </p>
                                     </div>
                                 </div>

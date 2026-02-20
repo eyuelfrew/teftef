@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const { Admin } = require("../models");
-const { signAdminToken, setAdminCookie, clearAdminCookie } = require("../middlewares/auth");
+const { signAdminToken, setAdminCookie, clearAdminCookie } = require("../utils/jwt");
 const AppError = require("../utils/AppError");
 const asyncHandler = require("../middlewares/asyncHandler");
 
@@ -34,7 +34,7 @@ exports.login = asyncHandler(async (req, res, next) => {
 
 exports.logout = (req, res) => {
     clearAdminCookie(res);
-    res.status(200).json({ status: "success" });
+    res.status(200).json({ status: "success", message: "Logged out successfully" });
 };
 
 exports.getMe = asyncHandler(async (req, res, next) => {

@@ -16,8 +16,9 @@ router.get("/my-products", requireVerifiedUser, productController.getMyProducts)
 router.get("/my-boosts", requireVerifiedUser, productController.getMyBoostHistory);
 
 router.get("/boost-packages", productController.getBoostPackages);
-router.get("/payment-agents", productController.getPaymentAgents);
+router.get("/bank-account", productController.getBankAccount);
 router.get("/promoted/boosted", productController.getBoostedProducts);
+router.get("/actively-boosted", productController.getActiveBoostedProducts);
 
 router.route("/")
     .get(optionalAuth, productController.getAllProducts)

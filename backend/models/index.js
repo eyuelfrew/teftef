@@ -10,7 +10,7 @@ const defineUser = require("./User");
 const defineCategoryAttribute = require("./CategoryAttribute");
 const defineBoostPackage = require("./BoostPackage");
 const defineBoostRequest = require("./BoostRequest");
-const definePaymentAgent = require("./PaymentAgent");
+const defineBankAccount = require("./BankAccount");
 const defineBrand = require("./Brand");
 const defineHomeCarousel = require("./HomeCarousel");
 const defineNormalCategory = require("./NormalCategory");
@@ -29,7 +29,7 @@ const Users = defineUser(sequelize);
 const CategoryAttribute = defineCategoryAttribute(sequelize);
 const BoostPackage = defineBoostPackage(sequelize);
 const BoostRequest = defineBoostRequest(sequelize);
-const PaymentAgent = definePaymentAgent(sequelize);
+const BankAccount = defineBankAccount(sequelize);
 const Brand = defineBrand(sequelize);
 const HomeCarousel = defineHomeCarousel(sequelize);
 const NormalCategory = defineNormalCategory(sequelize);
@@ -45,7 +45,7 @@ Users.hasMany(Product, { foreignKey: "userId", as: "products", constraints: fals
 BoostRequest.belongsTo(Product, { foreignKey: "productId", as: "product", constraints: false });
 BoostRequest.belongsTo(BoostPackage, { foreignKey: "packageId", as: "package", constraints: false });
 BoostRequest.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });
-BoostRequest.belongsTo(PaymentAgent, { foreignKey: "agentId", as: "agent", constraints: false });
+BoostRequest.belongsTo(BankAccount, { foreignKey: "bankAccountId", as: "bankAccount", constraints: false });
 
 BoostHistory.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });
 
@@ -103,7 +103,7 @@ module.exports = {
     CategoryAttribute,
     BoostPackage,
     BoostRequest,
-    PaymentAgent,
+    BankAccount,
     Brand,
     HomeCarousel,
     NormalCategory,

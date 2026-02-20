@@ -1,5 +1,4 @@
-const jwt = require("jsonwebtoken");
-const { verifyAccessToken } = require("../utils/jwt");
+const { verifyToken } = require("../utils/jwt");
 const { Users } = require("../models");
 const AppError = require("../utils/AppError");
 
@@ -33,9 +32,15 @@ const requireUser = async (req, res, next) => {
         // Verify access token
         let decoded;
         try {
-            decoded = verifyAccessToken(token);
+            decoded = verifyToken(token);
         } catch (error) {
             return next(new AppError(error.message, 401));
+        }
+
+        // Ensure this is a user token
+        if (decoded.role !== "user") {
+            console.log("[AUTH DEBUG] Role mismatch. Received:", decoded.role, decoded);
+            return next(new AppError("Unauthorized access", 403));
         }
 
         // Get user from database (to check if blocked)
@@ -59,6 +64,7 @@ const requireUser = async (req, res, next) => {
             id: user.id,
             email: user.email,
             firebase_uid: decoded.firebase_uid,
+            role: "user"
         };
 
         next();
@@ -90,9 +96,14 @@ const requireVerifiedUser = async (req, res, next) => {
         // Verify access token
         let decoded;
         try {
-            decoded = verifyAccessToken(token);
+            decoded = verifyToken(token);
         } catch (error) {
             return next(new AppError(error.message, 401));
+        }
+
+        // Ensure this is a user token
+        if (decoded.role !== "user") {
+            return next(new AppError("Unauthorized access", 403));
         }
 
         // Get user from database
@@ -122,6 +133,7 @@ const requireVerifiedUser = async (req, res, next) => {
             email: user.email,
             firebase_uid: decoded.firebase_uid,
             is_phone_verified: user.is_phone_verified,
+            role: "user"
         };
 
         next();
@@ -148,15 +160,18 @@ const optionalAuth = async (req, res, next) => {
 
         if (token) {
             try {
-                const decoded = verifyAccessToken(token);
-                const user = await Users.findByPk(decoded.id);
+                const decoded = verifyToken(token);
+                if (decoded.role === "user") {
+                    const user = await Users.findByPk(decoded.id);
 
-                if (user && !user.is_blocked && user.status === "active") {
-                    req.user = {
-                        id: user.id,
-                        email: user.email,
-                        firebase_uid: decoded.firebase_uid,
-                    };
+                    if (user && !user.is_blocked && user.status === "active") {
+                        req.user = {
+                            id: user.id,
+                            email: user.email,
+                            firebase_uid: decoded.firebase_uid,
+                            role: "user"
+                        };
+                    }
                 }
             } catch (error) {
                 // Token invalid, but that's okay for optional auth

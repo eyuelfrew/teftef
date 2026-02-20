@@ -53,7 +53,11 @@ const BoostModerationModal = ({ isOpen, onClose, onApprove, request }) => {
                             </div>
                             <div>
                                 <p className="text-sm font-bold text-[#0a0a0a] line-clamp-1">{request.product?.name}</p>
-                                <p className="text-xs text-neutral-500 font-medium">{request.package?.name} ({request.package?.durationHours}h)</p>
+                                <p className="text-xs text-neutral-500 font-medium">
+                                    {request.package?.name} ({request.package?.durationDays >= 1
+                                        ? `${request.package.durationDays}d`
+                                        : `${Math.round(request.package?.durationDays * 1440)}m`})
+                                </p>
                             </div>
                         </div>
 

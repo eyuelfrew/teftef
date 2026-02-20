@@ -1,16 +1,17 @@
-const { BoostPackage, BoostRequest, Product, Users, PaymentAgent, ActiveBoost, BoostHistory } = require("../models");
+const { BoostPackage, BoostRequest, Product, Users, BankAccount, ActiveBoost, BoostHistory } = require("../models");
+const { Op } = require("sequelize");
 const asyncHandler = require("../middlewares/asyncHandler");
 const AppError = require("../utils/AppError");
 
 // Package CRUD
 exports.createPackage = asyncHandler(async (req, res, next) => {
-    const { name, durationHours, price, isEnabled } = req.body;
-    const boostPackage = await BoostPackage.create({ name, durationHours, price, isEnabled: isEnabled !== undefined ? isEnabled : true });
-    res.status(201).json({ status: "success", data: { boostPackage } });
+    const { name, durationDays, price, isEnabled } = req.body;
+    const boostPackage = await BoostPackage.create({ name, durationDays, price, isEnabled: isEnabled !== undefined ? isEnabled : true });
+    res.status(201).json({ status: "success", data: { package: boostPackage } });
 });
 
 exports.getAllPackages = asyncHandler(async (req, res, next) => {
-    const packages = await BoostPackage.findAll({ order: [["durationHours", "ASC"]] });
+    const packages = await BoostPackage.findAll({ order: [["durationDays", "ASC"]] });
     res.status(200).json({ status: "success", results: packages.length, data: { packages } });
 });
 
@@ -23,9 +24,9 @@ exports.getPackage = asyncHandler(async (req, res, next) => {
 exports.updatePackage = asyncHandler(async (req, res, next) => {
     const boostPackage = await BoostPackage.findByPk(req.params.id);
     if (!boostPackage) return next(new AppError("Boost package not found", 404));
-    const { name, durationHours, price, isEnabled } = req.body;
+    const { name, durationDays, price, isEnabled } = req.body;
     if (name) boostPackage.name = name;
-    if (durationHours !== undefined) boostPackage.durationHours = durationHours;
+    if (durationDays !== undefined) boostPackage.durationDays = durationDays;
     if (price !== undefined) boostPackage.price = price;
     if (isEnabled !== undefined) boostPackage.isEnabled = isEnabled;
     await boostPackage.save();
@@ -39,40 +40,40 @@ exports.deletePackage = asyncHandler(async (req, res, next) => {
     res.status(204).json({ status: "success", data: null });
 });
 
-// Agent CRUD
-exports.createAgent = asyncHandler(async (req, res, next) => {
-    // Enforce single agent limit
-    const existingAgent = await PaymentAgent.findOne();
-    if (existingAgent) {
-        return next(new AppError("Only one payment agent is allowed. Please edit the existing one.", 400));
+// Bank Account CRUD
+exports.createBankAccount = asyncHandler(async (req, res, next) => {
+    // Enforce single bank account limit (optional, but keeping it for simplicity as per user request)
+    const existingAccount = await BankAccount.findOne();
+    if (existingAccount) {
+        return next(new AppError("A bank account already exists. Please edit the existing one.", 400));
     }
 
     const { name, bankName, accountNumber, isEnabled } = req.body;
-    const agent = await PaymentAgent.create({ name, bankName, accountNumber, isEnabled: isEnabled !== undefined ? isEnabled : true });
-    res.status(201).json({ status: "success", data: { agent } });
+    const account = await BankAccount.create({ name, bankName, accountNumber, isEnabled: isEnabled !== undefined ? isEnabled : true });
+    res.status(201).json({ status: "success", data: { account } });
 });
 
-exports.getAllAgents = asyncHandler(async (req, res, next) => {
-    const agents = await PaymentAgent.findAll({ limit: 1, order: [["createdAt", "DESC"]] });
-    res.status(200).json({ status: "success", results: agents.length, data: { agents } });
+exports.getBankAccount = asyncHandler(async (req, res, next) => {
+    const account = await BankAccount.findOne({ order: [["createdAt", "DESC"]] });
+    res.status(200).json({ status: "success", data: { bankAccount: account } });
 });
 
-exports.updateAgent = asyncHandler(async (req, res, next) => {
-    const agent = await PaymentAgent.findByPk(req.params.id);
-    if (!agent) return next(new AppError("Agent not found", 404));
+exports.updateBankAccount = asyncHandler(async (req, res, next) => {
+    const account = await BankAccount.findByPk(req.params.id);
+    if (!account) return next(new AppError("Bank account not found", 404));
     const { name, bankName, accountNumber, isEnabled } = req.body;
-    if (name) agent.name = name;
-    if (bankName) agent.bankName = bankName;
-    if (accountNumber) agent.accountNumber = accountNumber;
-    if (isEnabled !== undefined) agent.isEnabled = isEnabled;
-    await agent.save();
-    res.status(200).json({ status: "success", data: { agent } });
+    if (name) account.name = name;
+    if (bankName) account.bankName = bankName;
+    if (accountNumber) account.accountNumber = accountNumber;
+    if (isEnabled !== undefined) account.isEnabled = isEnabled;
+    await account.save();
+    res.status(200).json({ status: "success", data: { account } });
 });
 
-exports.deleteAgent = asyncHandler(async (req, res, next) => {
-    const agent = await PaymentAgent.findByPk(req.params.id);
-    if (!agent) return next(new AppError("Agent not found", 404));
-    await agent.destroy();
+exports.deleteBankAccount = asyncHandler(async (req, res, next) => {
+    const account = await BankAccount.findByPk(req.params.id);
+    if (!account) return next(new AppError("Bank account not found", 404));
+    await account.destroy();
     res.status(204).json({ status: "success", data: null });
 });
 
@@ -115,7 +116,7 @@ exports.verifyBoostRequest = asyncHandler(async (req, res, next) => {
 
         // Calculate timing: Use requested startTime if provided, otherwise start now
         const startsAt = req.body.startTime ? new Date(req.body.startTime) : new Date();
-        const expiresAt = new Date(startsAt.getTime() + (boostRequest.package.durationHours * 60 * 60 * 1000));
+        const expiresAt = new Date(startsAt.getTime() + (boostRequest.package.durationDays * 24 * 60 * 60 * 1000));
 
         product.isBoosted = true;
         product.boostExpiresAt = expiresAt;
@@ -182,7 +183,7 @@ exports.verifyBoostRequest = asyncHandler(async (req, res, next) => {
         productName: boostRequest.product?.name || "Deleted Product",
         productPrice: boostRequest.product?.price || 0,
         packageName: boostRequest.package?.name || "Deleted Package",
-        packageDurationHours: boostRequest.package?.durationHours || 0,
+        packageDurationDays: boostRequest.package?.durationDays || 0,
         userEmail: boostRequest.user?.email || "Deleted User",
         userFullName: boostRequest.user ? `${boostRequest.user.first_name} ${boostRequest.user.last_name}` : "Deleted User"
     });
@@ -193,6 +194,41 @@ exports.verifyBoostRequest = asyncHandler(async (req, res, next) => {
     res.status(200).json({ status: "success", message: `Request approved and archived.` });
 });
 
+exports.getActiveBoosts = asyncHandler(async (req, res, next) => {
+    const { search, category, user } = req.query;
+
+    const now = new Date();
+
+    // Build where clause for active boosts
+    const whereClause = {
+        startsAt: { [Op.lte]: now },
+        expiresAt: { [Op.gt]: now }
+    };
+
+    if (search) {
+        whereClause.name = { [Op.like]: `%${search}%` };
+    }
+
+    if (category) {
+        whereClause.category = category;
+    }
+
+    if (user) {
+        whereClause.userId = parseInt(user);
+    }
+
+    const activeBoosts = await ActiveBoost.findAll({
+        where: whereClause,
+        order: [["expiresAt", "ASC"]], // Show expiring soon first
+    });
+
+    res.status(200).json({
+        status: "success",
+        results: activeBoosts.length,
+        data: { activeBoosts }
+    });
+});
+
 exports.terminateBoost = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
 
@@ -201,29 +237,13 @@ exports.terminateBoost = asyncHandler(async (req, res, next) => {
 
     await activeBoost.destroy();
 
-    // Also update the product flags for status visibility
-    const product = await Product.findByPk(id);
-    if (product) {
-        product.isBoosted = false;
-        product.boostExpiresAt = null;
-        product.boostPackageId = null;
-        await product.save();
-    }
+    // Update the product flags for status visibility
+    await Product.update(
+        { isBoosted: false, boostExpiresAt: null, boostPackageId: null },
+        { where: { id } }
+    );
 
     res.status(200).json({ status: "success", message: "Boost terminated successfully" });
 });
 
-exports.getUserInfo = asyncHandler(async (req, res, next) => {
-    const user = await Users.findByPk(req.params.id, {
-        attributes: ["id", "first_name", "last_name", "email", "phone_number", "profile_pic", "createdAt"]
-    });
 
-    if (!user) {
-        return next(new AppError("User not found", 404));
-    }
-
-    res.status(200).json({
-        status: "success",
-        data: { user }
-    });
-});

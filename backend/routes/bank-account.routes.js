@@ -6,14 +6,12 @@ const router = express.Router();
 
 router.use(requireAdmin);
 
-// Boost Package CRUD
 router.route("/")
-    .get(boostController.getAllPackages)
-    .post(boostController.createPackage);
+    .get(boostController.getBankAccount)
+    .post(boostController.createBankAccount);
 
 router.route("/:id")
-    .get(boostController.getPackage)
-    .patch(boostController.updatePackage)
-    .delete(boostController.deletePackage);
+    .patch(boostController.updateBankAccount)
+    .delete(boostController.deleteBankAccount);
 
 module.exports = router;
