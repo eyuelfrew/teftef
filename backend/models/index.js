@@ -42,6 +42,10 @@ const { SearchLog, PopularSearch } = defineSearchTracking(sequelize);
 Product.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });
 Users.hasMany(Product, { foreignKey: "userId", as: "products", constraints: false });
 
+// Refresh Token associations
+Users.hasMany(RefreshToken, { foreignKey: "user_id", as: "refreshTokens", onDelete: "CASCADE" });
+RefreshToken.belongsTo(Users, { foreignKey: "user_id", as: "user" });
+
 BoostRequest.belongsTo(Product, { foreignKey: "productId", as: "product", constraints: false });
 BoostRequest.belongsTo(BoostPackage, { foreignKey: "packageId", as: "package", constraints: false });
 BoostRequest.belongsTo(Users, { foreignKey: "userId", as: "user", constraints: false });

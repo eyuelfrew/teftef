@@ -1,21 +1,259 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const { Users: User } = require("../models");
-const { signUserToken, setUserCookie, clearUserCookie } = require("../utils/jwt");
+const crypto = require("crypto");
+const { Users: User, RefreshToken: RefreshTokenModel } = require("../models");
+const { 
+    signUserToken, 
+    signRefreshToken, 
+    hashRefreshToken,
+    setUserCookie, 
+    setRefreshCookie,
+    clearUserCookie 
+} = require("../utils/jwt");
 const AppError = require("../utils/AppError");
 const asyncHandler = require("../middlewares/asyncHandler");
-
-exports.logout = (req, res) => {
-    clearUserCookie(res);
-    res.status(200).json({ status: "success", message: "Logged out successfully" });
-};
-
-// Token logic moved to utils/jwt.js
 
 // Generate 6-digit OTP
 const generateOtp = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
 };
+
+/**
+ * Get client IP address
+ */
+const getClientIp = (req) => {
+    return req.ip || 
+           req.headers["x-forwarded-for"]?.split(",")[0] || 
+           req.connection?.remoteAddress || 
+           "unknown";
+};
+
+/**
+ * Get device info from user agent
+ */
+const getDeviceInfo = (req) => {
+    const userAgent = req.headers["user-agent"] || "Unknown";
+    return userAgent.substring(0, 255);
+};
+
+/**
+ * Create refresh token for user
+ */
+const createRefreshToken = async (userId, deviceInfo, ipAddress) => {
+    const refreshToken = signRefreshToken();
+    const tokenHash = hashRefreshToken(refreshToken);
+    
+    // 30 days from now (sliding window)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+    
+    await RefreshTokenModel.create({
+        user_id: userId,
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+        device_info: deviceInfo,
+        ip_address: ipAddress,
+        is_revoked: false,
+    });
+    
+    return refreshToken;
+};
+
+/**
+ * Extend refresh token expiry (sliding window)
+ */
+const extendRefreshToken = async (tokenHash) => {
+    const refreshToken = await RefreshTokenModel.findOne({
+        where: { token_hash: tokenHash, is_revoked: false },
+    });
+    
+    if (!refreshToken) {
+        return null;
+    }
+    
+    // Check if expired
+    if (new Date() > refreshToken.expires_at) {
+        await refreshToken.destroy();
+        return null;
+    }
+    
+    // Slide the window: extend by 30 days from NOW
+    const newExpiry = new Date();
+    newExpiry.setDate(newExpiry.getDate() + 30);
+    
+    await refreshToken.update({ expires_at: newExpiry });
+    
+    return refreshToken;
+};
+
+/**
+ * Revoke a single refresh token (logout)
+ */
+const revokeRefreshToken = async (tokenHash) => {
+    await RefreshTokenModel.update(
+        { is_revoked: true },
+        { where: { token_hash: tokenHash } }
+    );
+};
+
+/**
+ * Revoke all refresh tokens for a user (logout all)
+ */
+const revokeAllUserTokens = async (userId) => {
+    await RefreshTokenModel.update(
+        { is_revoked: true },
+        { where: { user_id: userId } }
+    );
+};
+
+/**
+ * Cleanup expired refresh tokens (run periodically)
+ */
+const cleanupExpiredTokens = async () => {
+    try {
+        const deleted = await RefreshTokenModel.destroy({
+            where: {
+                expires_at: { [require("sequelize").Op.lt]: new Date() },
+            },
+        });
+        if (deleted > 0) {
+            console.log(`🧹 Cleaned up ${deleted} expired refresh tokens`);
+        }
+    } catch (error) {
+        console.error("❌ Refresh token cleanup failed:", error);
+    }
+};
+
+// Run cleanup every 24 hours
+setInterval(cleanupExpiredTokens, 24 * 60 * 60 * 1000);
+
+// ============================================================
+// LOGIN / LOGOUT
+// ============================================================
+
+exports.logout = asyncHandler(async (req, res, next) => {
+    // Revoke the refresh token if provided
+    const refreshToken = req.cookies?.refresh_token;
+    if (refreshToken) {
+        const tokenHash = hashRefreshToken(refreshToken);
+        await revokeRefreshToken(tokenHash);
+    }
+    
+    clearUserCookie(res);
+    res.status(200).json({ 
+        status: "success", 
+        message: "Logged out successfully" 
+    });
+});
+
+exports.logoutAll = asyncHandler(async (req, res, next) => {
+    const user = await Users.findByPk(req.user.id);
+    if (!user) {
+        return next(new AppError("User not found", 404));
+    }
+    
+    // Revoke ALL refresh tokens for this user
+    await revokeAllUserTokens(user.id);
+    
+    clearUserCookie(res);
+    res.status(200).json({ 
+        status: "success", 
+        message: "Logged out from all devices successfully" 
+    });
+});
+
+exports.refreshToken = asyncHandler(async (req, res, next) => {
+    const refreshToken = req.cookies?.refresh_token;
+    
+    if (!refreshToken) {
+        return next(new AppError("Refresh token required", 401));
+    }
+    
+    const tokenHash = hashRefreshToken(refreshToken);
+    
+    // Find and validate refresh token
+    const storedToken = await RefreshTokenModel.findOne({
+        where: { token_hash: tokenHash, is_revoked: false },
+        include: [{ model: Users, as: "user", attributes: ["id", "email", "is_blocked", "status"] }],
+    });
+    
+    if (!storedToken) {
+        return next(new AppError("Invalid or revoked refresh token", 401));
+    }
+    
+    // Check expiry
+    if (new Date() > storedToken.expires_at) {
+        await storedToken.destroy();
+        return next(new AppError("Refresh token expired. Please login again.", 401));
+    }
+    
+    const user = storedToken.user;
+    
+    // Check if user is blocked or disabled
+    if (user.is_blocked) {
+        return next(new AppError("Your account has been blocked. Contact support.", 403));
+    }
+    
+    if (user.status !== "active") {
+        return next(new AppError("Your account has been disabled. Contact support.", 403));
+    }
+    
+    // Extend the refresh token (sliding window)
+    await extendRefreshToken(tokenHash);
+    
+    // Generate new access token
+    const newAccessToken = signUserToken(user.id);
+    
+    // Set cookies
+    setUserCookie(res, newAccessToken);
+    // Keep the same refresh token cookie (expiry extended in DB)
+    setRefreshCookie(res, refreshToken);
+    
+    res.status(200).json({
+        status: "success",
+        data: {
+            access_token: newAccessToken,
+            user: {
+                id: user.id,
+                email: user.email,
+            }
+        }
+    });
+});
+
+exports.getActiveSessions = asyncHandler(async (req, res, next) => {
+    const user = await Users.findByPk(req.user.id);
+    if (!user) {
+        return next(new AppError("User not found", 404));
+    }
+    
+    const activeTokens = await RefreshTokenModel.findAll({
+        where: { 
+            user_id: user.id, 
+            is_revoked: false,
+            expires_at: { [require("sequelize").Op.gt]: new Date() }
+        },
+        attributes: ["id", "device_info", "ip_address", "createdAt", "expires_at"],
+        order: [["createdAt", "DESC"]],
+    });
+    
+    res.status(200).json({
+        status: "success",
+        data: {
+            sessions: activeTokens.map(token => ({
+                id: token.id,
+                device: token.device_info || "Unknown Device",
+                ip: token.ip_address || "Unknown",
+                created_at: token.createdAt,
+                expires_at: token.expires_at,
+            })),
+        }
+    });
+});
+
+// ============================================================
+// SYNC USER (SOCIAL LOGIN)
+// ============================================================
 
 exports.syncUser = asyncHandler(async (req, res, next) => {
     const { email, display_name, photo_url, phone_number, provider } = req.body;
@@ -58,7 +296,7 @@ exports.syncUser = asyncHandler(async (req, res, next) => {
                 return next(new AppError("This phone number is already linked to another account", 400));
             }
             user.phone_number = phone_number;
-            user.is_phone_verified = false; // Reset if changed via social
+            user.is_phone_verified = false;
         }
 
         await user.save();
@@ -69,8 +307,6 @@ exports.syncUser = asyncHandler(async (req, res, next) => {
         let otp = null;
         let otpExpiresAt = null;
 
-        // If social login provides a phone number, it still needs verification 
-        // as social providers usually only vouch for the email.
         if (phone_number) {
             otp = generateOtp();
             otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -92,8 +328,16 @@ exports.syncUser = asyncHandler(async (req, res, next) => {
         });
     }
 
+    // Generate tokens
     const accessToken = signUserToken(user.id);
+    const refreshToken = await createRefreshToken(
+        user.id, 
+        getDeviceInfo(req), 
+        getClientIp(req)
+    );
+    
     setUserCookie(res, accessToken);
+    setRefreshCookie(res, refreshToken);
 
     res.status(200).json({
         status: "success",
@@ -120,9 +364,6 @@ exports.syncUser = asyncHandler(async (req, res, next) => {
 // EMAIL/PHONE + PASSWORD LOGIN
 // ============================================================
 
-/**
- * Login with email or phone number and password
- */
 exports.login = asyncHandler(async (req, res, next) => {
     const { email, phone_number, password } = req.body;
 
@@ -171,9 +412,16 @@ exports.login = asyncHandler(async (req, res, next) => {
     user.last_login_at = new Date();
     await user.save();
 
-    // Generate token
+    // Generate tokens
     const accessToken = signUserToken(user.id);
+    const refreshToken = await createRefreshToken(
+        user.id, 
+        getDeviceInfo(req), 
+        getClientIp(req)
+    );
+    
     setUserCookie(res, accessToken);
+    setRefreshCookie(res, refreshToken);
 
     res.status(200).json({
         status: "success",
@@ -195,6 +443,10 @@ exports.login = asyncHandler(async (req, res, next) => {
     });
 });
 
+// ============================================================
+// OTP VERIFICATION
+// ============================================================
+
 exports.requestOtp = asyncHandler(async (req, res, next) => {
     const user = await User.findByPk(req.user.id);
     if (!user) {
@@ -215,7 +467,6 @@ exports.requestOtp = asyncHandler(async (req, res, next) => {
     user.otp_expires_at = expiry;
 
     if (req.body.phone_number && user.phone_number !== req.body.phone_number) {
-        // Check if phone is already in use
         const existingUserWithPhone = await User.findOne({ where: { phone_number: req.body.phone_number } });
         if (existingUserWithPhone && existingUserWithPhone.id !== user.id) {
             return next(new AppError("This phone number is already in use by another account", 400));
@@ -225,7 +476,6 @@ exports.requestOtp = asyncHandler(async (req, res, next) => {
 
     await user.save();
 
-    // Log to console as requested
     console.log(`[OTP] Verification code for user ${user.id} (${phoneNumber}): ${otp}`);
 
     res.status(200).json({
@@ -303,10 +553,6 @@ exports.getMe = asyncHandler(async (req, res, next) => {
 // REGISTRATION WITH PHONE OTP VERIFICATION
 // ============================================================
 
-/**
- * Step 1: Register user with basic info
- * Creates a user with unverified phone, sends OTP
- */
 exports.register = asyncHandler(async (req, res, next) => {
     const { first_name, last_name, email, phone_number, password } = req.body;
 
@@ -355,11 +601,16 @@ exports.register = asyncHandler(async (req, res, next) => {
     // Log OTP for development (in production, send via SMS)
     console.log(`[OTP] Registration verification code for ${phone_number}: ${otp}`);
 
-    // Sign token but user is not fully verified yet
+    // Generate tokens
     const accessToken = signUserToken(user.id);
+    const refreshToken = await createRefreshToken(
+        user.id, 
+        getDeviceInfo(req), 
+        getClientIp(req)
+    );
 
-    // Set cookie
     setUserCookie(res, accessToken);
+    setRefreshCookie(res, refreshToken);
 
     res.status(201).json({
         status: "success",
@@ -380,10 +631,6 @@ exports.register = asyncHandler(async (req, res, next) => {
     });
 });
 
-/**
- * Step 2: Resend OTP for registration verification
- * For users who didn't receive the OTP or it expired
- */
 exports.resendRegistrationOtp = asyncHandler(async (req, res, next) => {
     const user = await User.findByPk(req.user.id);
 
@@ -403,7 +650,6 @@ exports.resendRegistrationOtp = asyncHandler(async (req, res, next) => {
     user.otp_expires_at = otpExpiresAt;
     await user.save();
 
-    // Log OTP for development
     console.log(`[OTP] New verification code for ${user.phone_number}: ${otp}`);
 
     res.status(200).json({
@@ -412,10 +658,6 @@ exports.resendRegistrationOtp = asyncHandler(async (req, res, next) => {
     });
 });
 
-/**
- * Step 3: Verify OTP and complete registration
- * Activates the user account after phone verification
- */
 exports.verifyRegistrationOtp = asyncHandler(async (req, res, next) => {
     const { otp } = req.body;
 
@@ -468,10 +710,6 @@ exports.verifyRegistrationOtp = asyncHandler(async (req, res, next) => {
     });
 });
 
-/**
- * Cancel registration - for users who want to restart the process
- * Deletes unverified users
- */
 exports.cancelRegistration = asyncHandler(async (req, res, next) => {
     const user = await User.findByPk(req.user.id);
 
@@ -496,10 +734,6 @@ exports.cancelRegistration = asyncHandler(async (req, res, next) => {
 // EMAIL VERIFICATION (OTP)
 // ============================================================
 
-/**
- * Request email verification OTP
- * Can be used for a new email (not yet on profile) or the existing one.
- */
 exports.requestEmailVerification = asyncHandler(async (req, res, next) => {
     const { email } = req.body;
     const user = await User.findByPk(req.user.id);
@@ -510,13 +744,11 @@ exports.requestEmailVerification = asyncHandler(async (req, res, next) => {
 
     // If providing a new email
     if (email && email !== user.email) {
-        // Check if email already exists on another account
         const existingEmailUser = await User.findOne({ where: { email } });
         if (existingEmailUser) {
             return next(new AppError("This email is already in use by another account", 400));
         }
 
-        // Update user email and set to unverified
         user.email = email;
         user.is_email_verified = false;
     }
@@ -537,7 +769,6 @@ exports.requestEmailVerification = asyncHandler(async (req, res, next) => {
     user.email_otp_expires_at = expiresAt;
     await user.save();
 
-    // In production, send email with OTP
     console.log(`[EMAIL OTP] Verification code for ${user.email}: ${otp}`);
 
     res.status(200).json({
@@ -545,18 +776,11 @@ exports.requestEmailVerification = asyncHandler(async (req, res, next) => {
         message: "OTP sent to your email. Please check your inbox.",
         data: {
             email: user.email,
-            // In development, include OTP for testing
-            ...(process.env.NODE_ENV !== "production" && {
-                otp: otp
-            })
+            ...(process.env.NODE_ENV !== "production" && { otp })
         }
     });
 });
 
-/**
- * Verify email with OTP
- * Verifies the OTP and marks email as verified
- */
 exports.verifyEmail = asyncHandler(async (req, res, next) => {
     const { otp } = req.body;
 
@@ -579,16 +803,7 @@ exports.verifyEmail = asyncHandler(async (req, res, next) => {
     }
 
     const now = new Date();
-    console.log(`[EMAIL VERIFY] Checking OTP for ${user.email}`);
-    console.log(`[EMAIL VERIFY] Stored OTP: ${user.email_otp_code}`);
-    console.log(`[EMAIL VERIFY] Submitted OTP: ${otp}`);
-    console.log(`[EMAIL VERIFY] OTP expires at: ${user.email_otp_expires_at}`);
-    console.log(`[EMAIL VERIFY] Current time: ${now}`);
-    console.log(`[EMAIL VERIFY] Time remaining: ${user.email_otp_expires_at - now} ms`);
-
     if (now > user.email_otp_expires_at) {
-        console.log(`[EMAIL VERIFY] ❌ OTP expired`);
-        // Clear expired OTP
         user.email_otp_code = null;
         user.email_otp_expires_at = null;
         await user.save();
@@ -596,13 +811,10 @@ exports.verifyEmail = asyncHandler(async (req, res, next) => {
     }
 
     if (user.email_otp_code !== otp) {
-        console.log(`[EMAIL VERIFY] ❌ Invalid OTP`);
         return next(new AppError("Invalid OTP. Please try again.", 400));
     }
 
-    console.log(`[EMAIL VERIFY] ✅ Email verified successfully`);
-
-    // Success - mark email as verified
+    // Success
     user.is_email_verified = true;
     user.email_otp_code = null;
     user.email_otp_expires_at = null;
@@ -617,10 +829,6 @@ exports.verifyEmail = asyncHandler(async (req, res, next) => {
     });
 });
 
-/**
- * Resend email verification OTP
- * Generates and sends a new OTP
- */
 exports.resendEmailVerification = asyncHandler(async (req, res, next) => {
     const user = await User.findByPk(req.user.id);
 
@@ -640,17 +848,13 @@ exports.resendEmailVerification = asyncHandler(async (req, res, next) => {
     user.email_otp_expires_at = expiresAt;
     await user.save();
 
-    // In production, send email with OTP
     console.log(`[EMAIL OTP] New verification code for ${user.email}: ${otp}`);
 
     res.status(200).json({
         status: "success",
         message: "OTP resent to your email.",
         data: {
-            // In development, include OTP for testing
-            ...(process.env.NODE_ENV !== "production" && {
-                otp: otp
-            })
+            ...(process.env.NODE_ENV !== "production" && { otp })
         }
     });
 });

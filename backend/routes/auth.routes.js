@@ -9,10 +9,14 @@ const router = express.Router();
 router.post("/register", authController.register);
 router.post("/login", authController.login); // Email/phone + password login
 router.post("/sync-user", authController.syncUser); // Social login (Google, etc.)
+router.post("/refresh", authController.refreshToken); // Refresh access token
 
 // Protected routes (authentication required)
 router.get("/me", requireUser, authController.getMe);
 router.post("/logout", requireUser, authController.logout);
+router.post("/logout-all", requireUser, authController.logoutAll); // Logout from all devices
+router.get("/sessions", requireUser, authController.getActiveSessions); // Get active sessions
+
 router.post("/request-otp", requireUser, authController.requestOtp);
 router.post("/verify-otp", requireUser, authController.verifyOtp);
 router.post("/verify-email", requireUser, authController.verifyEmail); // Verify email with OTP
