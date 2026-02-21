@@ -4,7 +4,6 @@ DB_USER=root
 DB_PASS="t2zSq;YE_zbg7goO"
 DB_NAME=virallna_teftef
 DB_SYNC_ALTER=true
-
 # Server Configuration
 PORT=5000
 CLIENT_ORIGIN=http://localhost:5173

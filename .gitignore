@@ -7,9 +7,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
-.env
-.env.*
-!.env.example
 
 # Backend (Express)
 backend/node_modules/
