@@ -12,7 +12,6 @@ import {
     TrendingUp,
     XCircle
 } from 'lucide-react';
-import { cn } from '../../utils/cn';
 
 const ActiveBoostManagement = () => {
     const [boosts, setBoosts] = useState([]);
